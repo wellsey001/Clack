@@ -64,4 +64,11 @@ object Icons {
         path.lineTo(cx + s * 0.35f, cy - s * 0.15f)
         c.drawPath(path, p)
     }
+
+    fun clock(c: Canvas, p: Paint, cx: Float, cy: Float, s: Float) {
+        p.style = Paint.Style.STROKE
+        c.drawCircle(cx, cy, s / 2, p)
+        c.drawLine(cx, cy, cx, cy - s * 0.28f, p)
+        c.drawLine(cx, cy, cx + s * 0.2f, cy + s * 0.12f, p)
+    }
 }

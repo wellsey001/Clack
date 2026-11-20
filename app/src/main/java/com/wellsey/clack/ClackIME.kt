@@ -18,9 +18,11 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
+import android.widget.Toast
 import kotlin.math.abs
 
-class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripView.Listener {
+class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripView.Listener,
+    EmojiPanelView.Listener {
 
     private enum class Mode { LETTERS, SYMBOLS, MORE, EMOJI }
 
@@ -28,6 +30,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private lateinit var dictionary: Dictionary
     private var keyboard: KeyboardView? = null
     private var strip: SuggestionStripView? = null
+    private var emojiPanel: EmojiPanelView? = null
 
     private var mode = Mode.LETTERS
     private var shift = ShiftState.OFF
@@ -71,11 +74,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     override fun onCreateInputView(): View {
         val s = SuggestionStripView(this, this)
         val k = KeyboardView(this, this)
+        val e = EmojiPanelView(this, this).apply { visibility = View.GONE }
         strip = s
         keyboard = k
+        emojiPanel = e
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(s)
+            addView(e)
             addView(k)
         }
         applyPrefs()
@@ -156,6 +162,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val palette = if (dark) Palette.DARK else Palette.LIGHT
         kb.palette = palette
         strip?.palette = palette
+        emojiPanel?.palette = palette
 
         val baseDp = when (prefs.height) {
             "short" -> 46f
@@ -193,7 +200,17 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             Mode.LETTERS -> if (prefs.numberRow) Layouts.lettersWithNumbers else Layouts.letters
             Mode.SYMBOLS -> Layouts.symbols
             Mode.MORE -> Layouts.more
-            Mode.EMOJI -> Layouts.emojiPage
+            Mode.EMOJI -> Layouts.emojiBottom
+        }
+        emojiPanel?.let { panel ->
+            if (mode == Mode.EMOJI) {
+                // Same overall height as the letters, so nothing jumps when switching.
+                val letterRows = if (prefs.numberRow) 5 else 4
+                panel.panelHeight = ((letterRows - 1) * kb.keyHeightPx + 6 * resources.displayMetrics.density).toInt()
+                panel.visibility = View.VISIBLE
+            } else {
+                panel.visibility = View.GONE
+            }
         }
         updateStrip()
     }
@@ -206,13 +223,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             s.suggestions = null
             return
         }
-        val comps = dictionary.complete(word, 2)
+        val best = dictionary.suggest(word, 2)
         if (dictionary.isKnown(word)) {
             s.quoteLeft = false
-            s.suggestions = listOf(comps.getOrNull(0), word, comps.getOrNull(1))
+            s.suggestions = listOf(best.getOrNull(0), word, best.getOrNull(1))
         } else {
+            // Looks misspelt: keep what you typed on the left, the best fix in the middle.
             s.quoteLeft = true
-            s.suggestions = listOf(word, comps.getOrNull(0), comps.getOrNull(1))
+            s.suggestions = listOf(word, best.getOrNull(0), best.getOrNull(1))
         }
     }
 
@@ -266,7 +284,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             Key.SHIFT -> toggleShift()
             Key.TO_SYMBOLS -> mode = Mode.SYMBOLS
             Key.TO_MORE -> mode = Mode.MORE
-            Key.EMOJI -> mode = Mode.EMOJI
+            Key.EMOJI -> openEmoji()
             Key.TO_LETTERS -> {
                 mode = Mode.LETTERS
                 updateAutoShift()
@@ -371,7 +389,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     override fun onToolbarAction(action: Int) {
         when (action) {
             SuggestionStripView.ACTION_EMOJI -> {
-                mode = Mode.EMOJI
+                openEmoji()
                 render()
             }
             SuggestionStripView.ACTION_CLIPBOARD -> {
@@ -396,6 +414,22 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             }
             SuggestionStripView.ACTION_HIDE -> requestHideSelf(0)
         }
+    }
+
+    override fun onSuggestionLongPressed(word: String) {
+        val msg = if (dictionary.forget(word)) "Removed “$word” from learned words"
+        else "“$word” is a built-in word"
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        render()
+    }
+
+    override fun onEmoji(emoji: String) {
+        currentInputConnection?.commitText(emoji, 1)
+    }
+
+    private fun openEmoji() {
+        mode = Mode.EMOJI
+        emojiPanel?.refresh()
     }
 
     // ---- helpers ------------------------------------------------------------

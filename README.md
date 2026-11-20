@@ -6,7 +6,8 @@ A clean, fast Android keyboard (Kotlin, no third-party libraries).
 - Gboard-style look: flat keys, tinted function keys, pill-shaped enter key, light/dark themes
 - Toolbar above the keys (emoji, paste, settings, switch keyboard, hide) that turns into
   word suggestions while you type; it learns the words you use (never in password fields)
-- Emoji key and quick emoji page
+- Full emoji panel: every emoji your phone supports, by category, recently used, skin tones
+- Spell checker: suggests fixes for misspelt words and learns words you keep using
 - Slide left from delete to delete whole words
 - QWERTY with optional number row, symbols and extra symbols pages (includes £ and €)
 - Long-press for accents and symbols, slide to pick
@@ -34,3 +35,8 @@ installs over the previous one without uninstalling.
    warning that keyboards can see what you type — Clack has no internet permission,
    so nothing leaves your phone).
 3. Tap **Switch to Clack**.
+
+## Data credits
+- Word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave
+  (code MIT; word data CC BY-SA 4.0), filtered to the top 50,000 English words.
+- Emoji list: [unicode-emoji-json](https://github.com/muan/unicode-emoji-json) by Mu-An Chiou (MIT).

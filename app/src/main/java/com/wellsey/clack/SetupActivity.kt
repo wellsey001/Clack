@@ -85,7 +85,9 @@ class SetupActivity : Activity() {
         root.addView(section("Tips"))
         root.addView(body(
             "• Hold a key for accents and symbols, then slide to pick one\n" +
-                "• Tap a suggestion to finish the word — it learns words you use\n" +
+                "• Tap a suggestion to finish or fix a word\n" +
+                "• Words you use twice are learned; long-press a suggestion to forget one\n" +
+                "• Long-press an emoji to pick a skin tone\n" +
                 "• Slide left from delete to delete whole words\n" +
                 "• Slide along the space bar to move the cursor\n" +
                 "• Hold the space bar to switch to another keyboard\n" +

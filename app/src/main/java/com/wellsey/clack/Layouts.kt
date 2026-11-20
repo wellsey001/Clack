@@ -142,13 +142,6 @@ object Layouts {
         symbolsBottom,
     )
 
-    private const val EMOJI_LIST =
-        "😂 ❤️ 😍 🤣 😊 🙏 💕 😭 " +
-            "😘 👍 😅 👏 😁 🔥 🥰 💔 " +
-            "😢 🤔 😆 🙄 💪 😉 👌 🤗 " +
-            "😔 😎 😇 🎉 😴 🙌 👀 ✨"
-
-    val emojiPage: List<List<Key>> = EMOJI_LIST.split(" ").chunked(8).map { chunk ->
-        chunk.map { Key(it, Key.TEXT, 1.25f) }
-    } + listOf(listOf(abc, t(","), Key(" ", Key.SPACE, 5f), t("."), delete))
+    /** Bottom row shown under the emoji panel. */
+    val emojiBottom: List<List<Key>> = listOf(listOf(abc, Key(" ", Key.SPACE, 7f), delete))
 }

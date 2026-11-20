@@ -21,6 +21,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
     interface Listener {
         fun onSuggestionPicked(word: String)
         fun onToolbarAction(action: Int)
+        fun onSuggestionLongPressed(word: String)
     }
 
     private val density = resources.displayMetrics.density
@@ -39,21 +40,29 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
 
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        textSize = dp(17f)
+        textSize = dp(13.5f)
     }
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeWidth = dp(1.8f)
+        strokeWidth = dp(1.5f)
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private var pressedIndex = -1
+    private var longPressed = false
+    private val longPressRunnable = Runnable {
+        val word = suggestions?.getOrNull(pressedIndex)
+        if (word != null) {
+            longPressed = true
+            listener.onSuggestionLongPressed(word)
+        }
+    }
 
     private val toolbar = intArrayOf(ACTION_EMOJI, ACTION_CLIPBOARD, ACTION_SETTINGS, ACTION_SWITCH, ACTION_HIDE)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), dp(46f).toInt())
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), dp(24f).toInt())
     }
 
     private fun slotCount() = if (suggestions != null) 3 else toolbar.size
@@ -64,7 +73,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         val cell = width / n.toFloat()
         if (pressedIndex in 0 until n) {
             fill.color = palette.keyPressed
-            rect.set(pressedIndex * cell + dp(4f), dp(5f), (pressedIndex + 1) * cell - dp(4f), height - dp(5f))
+            rect.set(pressedIndex * cell + dp(4f), dp(1.5f), (pressedIndex + 1) * cell - dp(4f), height - dp(1.5f))
             canvas.drawRoundRect(rect, height / 2f, height / 2f, fill)
         }
         val s = suggestions
@@ -84,7 +93,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
             }
         } else {
             iconPaint.color = palette.icon
-            val size = dp(21f)
+            val size = dp(15f)
             for (i in toolbar.indices) {
                 val cx = i * cell + cell / 2
                 val cy = height / 2f
@@ -104,10 +113,20 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         val n = slotCount()
         val idx = (e.x / (width / n.toFloat())).toInt().coerceIn(0, n - 1)
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { pressedIndex = idx; invalidate() }
-            MotionEvent.ACTION_MOVE -> if (idx != pressedIndex) { pressedIndex = -1; invalidate() }
+            MotionEvent.ACTION_DOWN -> {
+                pressedIndex = idx
+                longPressed = false
+                if (suggestions != null) postDelayed(longPressRunnable, 500)
+                invalidate()
+            }
+            MotionEvent.ACTION_MOVE -> if (idx != pressedIndex) {
+                pressedIndex = -1
+                removeCallbacks(longPressRunnable)
+                invalidate()
+            }
             MotionEvent.ACTION_UP -> {
-                if (idx == pressedIndex) {
+                removeCallbacks(longPressRunnable)
+                if (idx == pressedIndex && !longPressed) {
                     val s = suggestions
                     if (s != null) s[idx]?.let { listener.onSuggestionPicked(it) }
                     else listener.onToolbarAction(toolbar[idx])
@@ -115,7 +134,11 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
                 pressedIndex = -1
                 invalidate()
             }
-            MotionEvent.ACTION_CANCEL -> { pressedIndex = -1; invalidate() }
+            MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPressRunnable)
+                pressedIndex = -1
+                invalidate()
+            }
         }
         return true
     }
