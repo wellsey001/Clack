@@ -60,6 +60,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private val feedbackHandler = android.os.Handler(feedbackThread.looper)
     private var stripRequest = 0
 
+    // Verification codes: refresh the bar when one arrives, and again when it expires.
+    private val otpListener = Runnable { uiHandler.post { render() } }
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { checkClipboardForCode() }
+
     /** After typing a letter we know shift should be off, so skip asking the app. */
     private var skipCapsCheck = false
 
@@ -85,10 +89,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         prefs = Prefs(this)
         dictionary = Dictionary(this)
         prefs.sp.registerOnSharedPreferenceChangeListener(prefListener)
+        OtpStore.addListener(otpListener)
+        getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
     }
 
     override fun onDestroy() {
         uiHandler.removeCallbacksAndMessages(null)
+        OtpStore.removeListener(otpListener)
+        getSystemService(ClipboardManager::class.java)?.removePrimaryClipChangedListener(clipListener)
         dictThread.quitSafely()
         feedbackThread.quitSafely()
         prefs.sp.unregisterOnSharedPreferenceChangeListener(prefListener)
@@ -260,6 +268,12 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val ic = currentInputConnection
         val word = if (ic != null && suggestionsAllowed && mode != Mode.EMOJI) currentWord(ic) else ""
         val request = ++stripRequest
+        val code = if (prefs.otpCodes && mode != Mode.EMOJI) OtpStore.current() else null
+        s.otpCode = code
+        if (code != null) {
+            uiHandler.removeCallbacks(otpListener)
+            uiHandler.postDelayed(otpListener, OtpStore.remainingMs() + 500)
+        }
         if (word.isEmpty()) {
             s.suggestions = null
             return
@@ -515,6 +529,11 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 if (!switched) getSystemService(InputMethodManager::class.java)?.showInputMethodPicker()
             }
             SuggestionStripView.ACTION_HIDE -> requestHideSelf(0)
+            SuggestionStripView.ACTION_PASTE_CODE -> {
+                OtpStore.current()?.let { currentInputConnection?.commitText(it, 1) }
+                OtpStore.clear()
+            }
+            SuggestionStripView.ACTION_DISMISS_CODE -> OtpStore.clear()
         }
     }
 
@@ -527,6 +546,18 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     override fun onEmoji(emoji: String) {
         currentInputConnection?.commitText(emoji, 1)
+    }
+
+    /** A code you've just copied (e.g. with "Copy code" on a message) is offered for pasting. */
+    private fun checkClipboardForCode() {
+        if (!prefs.otpCodes) return
+        val text = try {
+            getSystemService(ClipboardManager::class.java)?.primaryClip
+                ?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text
+        } catch (_: SecurityException) {
+            null
+        }
+        OtpDetector.fromClipboard(text)?.let { OtpStore.offer(it) }
     }
 
     private fun openEmoji() {

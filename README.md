@@ -27,6 +27,7 @@
 | ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |
 | 🧠 **Learns your words** | Type a word twice and Clack treats it as correct and suggests it. Names, slang and in-jokes included. |
 | 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. |
+| 🔑 **Sign-in codes** | A "Paste code" button appears when a verification code arrives in a notification or is copied. It's held in memory for 5 minutes and never saved. |
 | 🔒 **Private by design** | No internet permission, no analytics, no accounts. Nothing is learned from passwords, emails, web addresses or incognito tabs. |
 | 🪶 **Tiny** | About 1 MB, pure Kotlin, zero third-party libraries. |
 
@@ -44,6 +45,7 @@
 | **Delete** right after an auto-correct | Undo it, and never correct that word again |
 | **Hold** a suggestion | Forget a word Clack learned |
 | **Hold** an emoji | Pick a skin tone |
+| Tap **Paste code** in the top bar | Paste a sign-in code that just arrived (✕ to dismiss) |
 | Type `.` `,` `!` `?` after picking a suggestion | The extra space goes after the punctuation, as in Gboard |
 
 ## 📲 Install
@@ -66,6 +68,17 @@ Open the Clack app or tap ⚙ in the toolbar:
 - Vibration · key sounds
 - Theme: follow system / light / dark
 - Keyboard height: short / normal / tall
+
+## 🔑 Sign-in codes
+
+Clack can spot codes such as *"482913 is your verification code"* in two ways:
+
+- **Notifications.** Turn on *notification access* in Clack's settings. Because Clack is installed outside the Play Store, Android may first ask you to open Clack's app info, tap ⋮, then choose **Allow restricted settings**.
+- **Copied text.** Copy a code (many messaging apps add a *Copy code* button to the notification) and Clack offers it right away. This works on every Android version.
+
+> **Android 15+:** Android now hides codes in most notifications from apps that aren't built into the phone, so copying the code is the reliable route there.
+
+Only the code is kept, in memory, for 5 minutes or until you paste or dismiss it. No other notification content is read or stored.
 
 ## 🔍 How the spell checker works
 

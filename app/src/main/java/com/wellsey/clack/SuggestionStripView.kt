@@ -34,6 +34,13 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
     var suggestions: List<String?>? = null
         set(value) { if (field != value) { field = value; pressedIndex = -1; invalidate() } }
 
+    /** A verification code ready to paste, shown instead of the toolbar while it's fresh. */
+    var otpCode: String? = null
+        set(value) { if (field != value) { field = value; pressedIndex = -1; invalidate() } }
+
+    private val otpMode get() = suggestions == null && otpCode != null
+    private val closeWidth get() = height * 1.3f
+
     /** Display text for the left slot when it's the word as typed (shown in quotes). */
     var quoteLeft = false
         set(value) { field = value; invalidate() }
@@ -67,8 +74,58 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
 
     private fun slotCount() = if (suggestions != null) 3 else toolbar.size
 
+    private fun indexAt(x: Float): Int {
+        if (otpMode) return if (x > width - closeWidth) 1 else 0
+        val n = slotCount()
+        return (x / (width / n.toFloat())).toInt().coerceIn(0, n - 1)
+    }
+
+    private fun drawOtp(canvas: Canvas, code: String) {
+        // "Paste code 123456" pill, plus an ✕ to dismiss it
+        val chipRight = width - closeWidth
+        rect.set(dp(8f), dp(6f), chipRight, height - dp(6f))
+        fill.color = palette.fnKey
+        canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, fill)
+        if (pressedIndex == 0) {
+            fill.color = if (palette.isDark) 0x22FFFFFF else 0x22000000
+            canvas.drawRoundRect(rect, rect.height() / 2f, rect.height() / 2f, fill)
+        }
+        val y = height / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+        val label = "Paste code  "
+        textPaint.typeface = Typeface.DEFAULT
+        val labelW = textPaint.measureText(label)
+        textPaint.typeface = Typeface.DEFAULT_BOLD
+        val codeW = textPaint.measureText(code)
+        val start = rect.centerX() - (labelW + codeW) / 2f
+        textPaint.color = palette.fnText
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.typeface = Typeface.DEFAULT
+        canvas.drawText(label, start, y, textPaint)
+        textPaint.typeface = Typeface.DEFAULT_BOLD
+        canvas.drawText(code, start + labelW, y, textPaint)
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.typeface = Typeface.DEFAULT
+
+        val cx = width - closeWidth / 2f
+        val cy = height / 2f
+        if (pressedIndex == 1) {
+            fill.color = palette.keyPressed
+            canvas.drawCircle(cx, cy, height * 0.36f, fill)
+        }
+        iconPaint.color = palette.icon
+        iconPaint.style = Paint.Style.STROKE
+        val d = dp(6f)
+        canvas.drawLine(cx - d, cy - d, cx + d, cy + d, iconPaint)
+        canvas.drawLine(cx - d, cy + d, cx + d, cy - d, iconPaint)
+    }
+
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(palette.background)
+        val otp = otpCode
+        if (suggestions == null && otp != null) {
+            drawOtp(canvas, otp)
+            return
+        }
         val n = slotCount()
         val cell = width / n.toFloat()
         if (pressedIndex in 0 until n) {
@@ -110,8 +167,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
-        val n = slotCount()
-        val idx = (e.x / (width / n.toFloat())).toInt().coerceIn(0, n - 1)
+        val idx = indexAt(e.x)
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 pressedIndex = idx
@@ -128,8 +184,11 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
                 removeCallbacks(longPressRunnable)
                 if (idx == pressedIndex && !longPressed) {
                     val s = suggestions
-                    if (s != null) s[idx]?.let { listener.onSuggestionPicked(it) }
-                    else listener.onToolbarAction(toolbar[idx])
+                    when {
+                        s != null -> s[idx]?.let { listener.onSuggestionPicked(it) }
+                        otpMode -> listener.onToolbarAction(if (idx == 0) ACTION_PASTE_CODE else ACTION_DISMISS_CODE)
+                        else -> listener.onToolbarAction(toolbar[idx])
+                    }
                 }
                 pressedIndex = -1
                 invalidate()
@@ -149,5 +208,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         const val ACTION_SETTINGS = 3
         const val ACTION_SWITCH = 4
         const val ACTION_HIDE = 5
+        const val ACTION_PASTE_CODE = 6
+        const val ACTION_DISMISS_CODE = 7
     }
 }

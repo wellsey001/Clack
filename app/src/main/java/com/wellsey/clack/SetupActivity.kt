@@ -1,7 +1,11 @@
 package com.wellsey.clack
 
 import android.app.Activity
+import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.graphics.Typeface
 import android.os.Bundle
 import android.provider.Settings
@@ -22,6 +26,7 @@ class SetupActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var enableButton: Button
     private lateinit var switchButton: Button
+    private lateinit var otpAccessButton: Button
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -70,6 +75,39 @@ class SetupActivity : Activity() {
         root.addView(section("Feedback"))
         root.addView(toggle("Vibrate on key press", prefs.vibrate) { prefs.vibrate = it })
         root.addView(toggle("Sound on key press", prefs.sound) { prefs.sound = it })
+
+        root.addView(section("Verification codes"))
+        root.addView(toggle("Offer codes from notifications and copied text", prefs.otpCodes) { prefs.otpCodes = it })
+        root.addView(body(
+            "When a sign-in code arrives, a \"Paste code\" button appears above the keys. " +
+                "Codes are kept in memory for 5 minutes and never saved."
+        ))
+        otpAccessButton = Button(this).apply {
+            setOnClickListener { openNotificationAccess() }
+        }
+        root.addView(otpAccessButton, fullWidth(top = 6))
+        if (Build.VERSION.SDK_INT >= 33) {
+            root.addView(body(
+                "If the switch is greyed out (\"Restricted setting\"), it's because Clack wasn't installed " +
+                    "from the Play Store. Open Clack's app info, tap ⋮ (top right) → Allow restricted settings, " +
+                    "then try again."
+            ))
+            root.addView(Button(this).apply {
+                text = "Open Clack's app info"
+                setOnClickListener {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                }
+            }, fullWidth(top = 2))
+        }
+        if (Build.VERSION.SDK_INT >= 35) {
+            root.addView(body(
+                "Android 15 and newer hide codes in most notifications from apps like Clack. " +
+                    "If no button appears, tap \"Copy code\" on the message (or copy the code) " +
+                    "and Clack will offer it straight away."
+            ))
+        } else {
+            root.addView(body("Copying a code also works, with or without notification access."))
+        }
 
         root.addView(section("Theme"))
         root.addView(radio(
@@ -126,6 +164,38 @@ class SetupActivity : Activity() {
         enableButton.text = if (enabled) "✓  Clack is enabled" else "1.  Enable Clack in settings"
         switchButton.isEnabled = enabled
         switchButton.text = if (current) "✓  Clack is your keyboard" else "2.  Switch to Clack"
+        otpAccessButton.text =
+            if (hasNotificationAccess()) "✓  Notification access is on" else "Allow notification access"
+    }
+
+    private fun listenerComponent() = ComponentName(this, OtpNotificationListener::class.java)
+
+    private fun hasNotificationAccess(): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 27) {
+            getSystemService(NotificationManager::class.java)
+                ?.isNotificationListenerAccessGranted(listenerComponent()) == true
+        } else {
+            Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                ?.contains(packageName) == true
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun openNotificationAccess() {
+        val intent = if (Build.VERSION.SDK_INT >= 30) {
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                listenerComponent().flattenToString(),
+            )
+        } else {
+            Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
+        }
     }
 
     // ---- little view helpers --------------------------------------------

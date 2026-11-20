@@ -38,6 +38,11 @@ class Prefs(context: Context) {
         get() = bool("auto_correct", true)
         set(v) = setBool("auto_correct", v)
 
+    /** Offer verification codes from notifications / the clipboard. */
+    var otpCodes: Boolean
+        get() = bool("otp_codes", true)
+        set(v) = setBool("otp_codes", v)
+
     var keyPreview: Boolean
         get() = bool("key_preview", true)
         set(v) = setBool("key_preview", v)
