@@ -27,7 +27,7 @@
 | ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |
 | 🧠 **Learns your words** | Type a word twice and Clack treats it as correct and suggests it. Names, slang and in-jokes included. |
 | 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. |
-| 🔒 **Private by design** | No internet permission, no analytics, no accounts. Learned words never come from password, email or URL fields. |
+| 🔒 **Private by design** | No internet permission, no analytics, no accounts. Nothing is learned from passwords, emails, web addresses or incognito tabs. |
 | 🪶 **Tiny** | About 1 MB, pure Kotlin, zero third-party libraries. |
 
 ## 👆 Gestures and shortcuts

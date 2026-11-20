@@ -43,7 +43,15 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     /** Last auto-correction, so pressing delete straight after can undo it. */
     private class Undo(val original: String, val tail: String)
     private var undo: Undo? = null
+    /** Show the suggestion bar (everywhere except passwords). */
     private var suggestionsAllowed = true
+    /** Auto-correct (not in web addresses, emails or fields that ask for no suggestions). */
+    private var autoCorrectAllowed = true
+    /** Remember new words (not in incognito tabs, emails or web addresses). */
+    private var learningAllowed = true
+
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val refreshStrip = Runnable { updateStrip() }
 
     private var selStart = -1
     private var selEnd = -1
@@ -70,6 +78,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     }
 
     override fun onDestroy() {
+        uiHandler.removeCallbacksAndMessages(null)
         prefs.sp.unregisterOnSharedPreferenceChangeListener(prefListener)
         dictionary.save()
         super.onDestroy()
@@ -110,7 +119,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         }
         selStart = info.initialSelStart
         selEnd = info.initialSelEnd
-        suggestionsAllowed = prefs.suggestions && allowsSuggestions(info)
+        configureForField(info)
         lastSpaceTap = 0
         autoSpaced = false
         updateAutoShift()
@@ -136,20 +145,33 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         render()
     }
 
-    /** No learning or suggestions in passwords, numbers or fields that opt out. */
-    private fun allowsSuggestions(info: EditorInfo): Boolean {
+    /**
+     * Decide what to switch on for this text box. Like Gboard, suggestions show almost
+     * everywhere (many apps, e.g. Messenger and browser search bars, mark their boxes
+     * "no suggestions" or "web address" even when you're typing words), but auto-correct
+     * and learning are more careful.
+     */
+    private fun configureForField(info: EditorInfo) {
         val type = info.inputType
-        if ((type and InputType.TYPE_MASK_CLASS) != InputType.TYPE_CLASS_TEXT) return false
-        if ((type and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) return false
-        return when (type and InputType.TYPE_MASK_VARIATION) {
+        val cls = type and InputType.TYPE_MASK_CLASS
+        val variation = type and InputType.TYPE_MASK_VARIATION
+        val isText = cls == InputType.TYPE_CLASS_TEXT || cls == InputType.TYPE_NULL
+        val isPassword = cls == InputType.TYPE_CLASS_TEXT && variation in setOf(
             InputType.TYPE_TEXT_VARIATION_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
             InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
+        )
+        val isAddress = cls == InputType.TYPE_CLASS_TEXT && variation in setOf(
             InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
             InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
-            InputType.TYPE_TEXT_VARIATION_URI -> false
-            else -> true
-        }
+            InputType.TYPE_TEXT_VARIATION_URI,
+        )
+        val noSuggestionsFlag = (type and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+        val incognito = (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
+
+        suggestionsAllowed = prefs.suggestions && isText && !isPassword
+        autoCorrectAllowed = suggestionsAllowed && !isAddress && !noSuggestionsFlag
+        learningAllowed = suggestionsAllowed && !isAddress && !incognito
     }
 
     // ---- settings & drawing ----------------------------------------------
@@ -217,6 +239,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             }
         }
         updateStrip()
+        uiHandler.removeCallbacks(refreshStrip)
+        uiHandler.postDelayed(refreshStrip, 80)
     }
 
     private fun updateStrip() {
@@ -227,6 +251,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             s.suggestions = null
             return
         }
+        // (Re-checked shortly after each key in case the app was slow to update.)
         val best = dictionary.suggest(word, 2)
         if (dictionary.isKnown(word)) {
             s.quoteLeft = false
@@ -240,16 +265,21 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     /** The word directly before the cursor (empty if there's a selection). */
     private fun currentWord(ic: InputConnection): String {
-        if (selStart != selEnd) return ""
+        // Ask the app directly: some apps report the cursor late, so our own
+        // record of the selection can be stale.
+        if (selStart != selEnd && !ic.getSelectedText(0).isNullOrEmpty()) return ""
         val before = ic.getTextBeforeCursor(48, 0) ?: return ""
         var i = before.length
-        while (i > 0 && (before[i - 1].isLetter() || before[i - 1] == '\'')) i--
-        return before.substring(i).trimStart('\'')
+        while (i > 0 && (before[i - 1].isLetter() || isApostrophe(before[i - 1]))) i--
+        // Some apps turn ' into a curly ’; treat both the same.
+        return before.substring(i).trimStart('\'', '’').replace('’', '\'')
     }
+
+    private fun isApostrophe(c: Char) = c == '\'' || c == '’'
 
     /** (typed word, fix) if the word before the cursor should be auto-corrected. */
     private fun autoCorrection(ic: InputConnection): Pair<String, String>? {
-        if (!prefs.autoCorrect || !suggestionsAllowed) return null
+        if (!prefs.autoCorrect || !autoCorrectAllowed) return null
         val word = currentWord(ic)
         if (word.isEmpty()) return null
         val fix = dictionary.autocorrection(word) ?: return null
@@ -264,7 +294,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     }
 
     private fun learnCurrentWord(ic: InputConnection) {
-        if (!suggestionsAllowed) return
+        if (!learningAllowed) return
         val w = currentWord(ic)
         if (w.length >= 2) dictionary.learn(w)
     }
@@ -424,7 +454,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         if (typed.isNotEmpty()) ic.deleteSurroundingText(typed.length, 0)
         ic.commitText("$word ", 1)
         ic.endBatchEdit()
-        if (suggestionsAllowed) dictionary.learn(word)
+        if (learningAllowed) dictionary.learn(word)
         if (shift == ShiftState.ON) shift = ShiftState.OFF
         autoSpaced = true
         lastSpaceTap = 0
