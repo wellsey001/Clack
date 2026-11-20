@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1a2e"/><stop offset="1" stop-color="#1f2023"/></linearGradient></defs>
+<rect width="1280" height="520" rx="28" fill="url(#bg)"/>
+<text x="80" y="190" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="108" font-weight="700" fill="#e8eaed" letter-spacing="-2">Clack</text>
+<text x="84" y="242" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="30" fill="#a8c7fa">A Gboard-style keyboard for Android</text>
+<text x="84" y="290" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="22" fill="#9aa0a6">Fast · private · no internet permission</text>
+<rect x="84" y="340" width="158" height="40" rx="20" fill="#2e3a4d"/>
+<text x="163" y="366" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="18" fill="#d3e3fd">Spell check</text>
+<rect x="254.5" y="340" width="170" height="40" rx="20" fill="#2e3a4d"/>
+<text x="340" y="366" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="18" fill="#d3e3fd">Auto-correct</text>
+<rect x="84" y="392" width="170" height="40" rx="20" fill="#2e3a4d"/>
+<text x="169" y="418" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="18" fill="#d3e3fd">1,900+ emoji</text>
+<rect x="266.0" y="392" width="228" height="40" rx="20" fill="#2e3a4d"/>
+<text x="380" y="418" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="18" fill="#d3e3fd">Learns your words</text>
+<rect x="680" y="105" width="540" height="310" rx="22" fill="#1f2023" stroke="#3c3e43" stroke-width="2"/>
+<text x="770" y="143" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="19" font-weight="400" fill="#e8eaed">“helo”</text>
+<text x="950" y="143" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#e8eaed">hello</text>
+<rect x="860" y="127" width="1.5" height="22" fill="#3c3e43"/>
+<text x="1130" y="143" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="19" font-weight="400" fill="#e8eaed">help</text>
+<rect x="1040" y="127" width="1.5" height="22" fill="#3c3e43"/>
+<rect x="695.0" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="717.8" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">q</text>
+<text x="731.6" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">1</text>
+<rect x="746.6" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="769.4" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">w</text>
+<text x="783.2" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">2</text>
+<rect x="798.2" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="821.0" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">e</text>
+<text x="834.8" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">3</text>
+<rect x="849.8" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="872.6" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">r</text>
+<text x="886.4" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">4</text>
+<rect x="901.4" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="924.2" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">t</text>
+<text x="938.0" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">5</text>
+<rect x="953.0" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="975.8" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">y</text>
+<text x="989.6" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">6</text>
+<rect x="1004.6" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1027.4" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">u</text>
+<text x="1041.2" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">7</text>
+<rect x="1056.2" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1079.0" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">i</text>
+<text x="1092.8" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">8</text>
+<rect x="1107.8" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1130.6" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">o</text>
+<text x="1144.4" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">9</text>
+<rect x="1159.4" y="171.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1182.2" y="204.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">p</text>
+<text x="1196.0" y="187.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#9aa0a6">0</text>
+<rect x="720.8" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="743.6" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">a</text>
+<rect x="772.4" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="795.2" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">s</text>
+<rect x="824.0" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="846.8" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">d</text>
+<rect x="875.6" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="898.4" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">f</text>
+<rect x="927.2" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="950.0" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">g</text>
+<rect x="978.8" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1001.6" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">h</text>
+<rect x="1030.4" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1053.2" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">j</text>
+<rect x="1082.0" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1104.8" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">k</text>
+<rect x="1133.6" y="229.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1156.4" y="262.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">l</text>
+<rect x="695.0" y="287.0" width="71.4" height="48" rx="8" fill="#a8c7fa"/>
+<text x="730.7" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#062e6f">⇧</text>
+<rect x="772.4" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="795.2" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">z</text>
+<rect x="824.0" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="846.8" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">x</text>
+<rect x="875.6" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="898.4" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">c</text>
+<rect x="927.2" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="950.0" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">v</text>
+<rect x="978.8" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1001.6" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">b</text>
+<rect x="1030.4" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1053.2" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">n</text>
+<rect x="1082.0" y="287.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1104.8" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">m</text>
+<rect x="1133.6" y="287.0" width="71.4" height="48" rx="8" fill="#2e3a4d"/>
+<text x="1169.3" y="320.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#d3e3fd">⌫</text>
+<rect x="695.0" y="345.0" width="71.4" height="48" rx="8" fill="#2e3a4d"/>
+<text x="730.7" y="378.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="17" fill="#d3e3fd">?123</text>
+<rect x="772.4" y="345.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="795.2" y="378.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">,</text>
+<rect x="824.0" y="345.0" width="45.6" height="48" rx="8" fill="#2e3a4d"/>
+<text x="846.8" y="378.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#d3e3fd">☺</text>
+<rect x="875.6" y="345.0" width="200.4" height="48" rx="8" fill="#3c3e43"/>
+<rect x="1082.0" y="345.0" width="45.6" height="48" rx="8" fill="#3c3e43"/>
+<text x="1104.8" y="378.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#e8eaed">.</text>
+<rect x="1133.6" y="345.0" width="71.4" height="48" rx="24" fill="#a8c7fa"/>
+<text x="1169.3" y="378.0" text-anchor="middle" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="24" fill="#062e6f">↵</text>
+</svg>

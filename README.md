@@ -1,42 +1,119 @@
-# Clack
+<p align="center">
+  <img src="docs/banner.svg" alt="Clack — a Gboard-style keyboard for Android" width="100%">
+</p>
 
-A clean, fast Android keyboard (Kotlin, no third-party libraries).
+<p align="center">
+  <a href="https://github.com/wellsey001/Clack/actions/workflows/build.yml"><img src="https://github.com/wellsey001/Clack/actions/workflows/build.yml/badge.svg" alt="Build APK"></a>
+  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
+  <img src="https://img.shields.io/badge/Kotlin-100%25-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin">
+  <img src="https://img.shields.io/badge/dependencies-0-blue" alt="Zero dependencies">
+  <img src="https://img.shields.io/badge/internet%20permission-none-success" alt="No internet permission">
+</p>
 
-## Features
-- Gboard-style look: flat keys, tinted function keys, pill-shaped enter key, light/dark themes
-- Toolbar above the keys (emoji, paste, settings, switch keyboard, hide) that turns into
-  word suggestions while you type; it learns the words you use (never in password fields)
-- Full emoji panel: every emoji your phone supports, by category, recently used, skin tones
-- Spell checker: suggests fixes for misspelt words and learns words you keep using
-- Slide left from delete to delete whole words
-- QWERTY with optional number row, symbols and extra symbols pages (includes £ and €)
-- Long-press for accents and symbols, slide to pick
-- Pop-up key preview, accent hints on keys
-- Shift, double-tap shift for caps lock, automatic sentence capitals
-- Double-tap space for a full stop
-- Slide along the space bar to move the cursor
-- Hold the space bar to switch keyboards
-- Hold delete to keep deleting
-- Enter key shows Go / Search / Send / Next / Done when the app asks for it
-- Light, dark or follow-system theme; three keyboard heights
-- Vibration and sound feedback
-- Smooth two-thumb typing (a second finger never drops the first key)
+<p align="center">
+  <b>The keyboard you know, minus the cloud.</b><br>
+  Clack looks and feels like Gboard: suggestions, auto-correct, every emoji, swipe gestures.<br>
+  It doesn't ask for internet access, so <i>nothing you type can leave your phone</i>.
+</p>
 
-## Build
-Push to `main` on GitHub. The **Build APK** workflow builds the app and attaches
-`Clack-apk` to the run. Download it, unzip, and install the APK on your phone.
+---
 
-The repo includes a fixed signing key (`app/debug.keystore`), so every new build
-installs over the previous one without uninstalling.
+## ✨ Highlights
 
-## Set up on the phone
-1. Open **Clack** from your app drawer.
-2. Tap **Enable Clack in settings** and switch Clack on (Android shows a standard
-   warning that keyboards can see what you type — Clack has no internet permission,
-   so nothing leaves your phone).
-3. Tap **Switch to Clack**.
+| | |
+|---|---|
+| ⌨️ **Feels like Gboard** | Material You colours, flat keys, a pill-shaped enter key and light/dark themes that follow your system. |
+| 🔤 **Spell check** | Misspelt words get a fix in the middle of the suggestion bar: *teh → the*, *recieve → receive*, *dont → don't*. |
+| ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |
+| 🧠 **Learns your words** | Type a word twice and Clack treats it as correct and suggests it. Names, slang and in-jokes included. |
+| 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. |
+| 🔒 **Private by design** | No internet permission, no analytics, no accounts. Learned words never come from password, email or URL fields. |
+| 🪶 **Tiny** | About 1 MB, pure Kotlin, zero third-party libraries. |
 
-## Data credits
-- Word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave
-  (code MIT; word data CC BY-SA 4.0), filtered to the top 50,000 English words.
+## 👆 Gestures and shortcuts
+
+| Do this | To get this |
+|---|---|
+| **Hold** a letter, then slide | Accents and symbols (é, ñ, ß…) |
+| **Slide** along the space bar | Move the cursor |
+| **Slide left** from delete | Select and delete whole words |
+| **Hold** delete | Keep deleting |
+| **Hold** the space bar | Switch to another keyboard |
+| **Double-tap** shift | Caps lock |
+| **Double-tap** space | Full stop and a space |
+| **Delete** right after an auto-correct | Undo it, and never correct that word again |
+| **Hold** a suggestion | Forget a word Clack learned |
+| **Hold** an emoji | Pick a skin tone |
+| Type `.` `,` `!` `?` after picking a suggestion | The extra space goes after the punctuation, as in Gboard |
+
+## 📲 Install
+
+1. Open the latest successful run on the [**Actions**](https://github.com/wellsey001/Clack/actions/workflows/build.yml) page.
+2. Download **Clack-apk** from *Artifacts*, unzip it and install the APK.
+3. Open **Clack** and follow the two steps: **Enable** it, then **Switch** to it.
+
+> Android shows a standard warning that a keyboard "may be able to collect all the text you type".
+> Every keyboard gets this warning. Clack can't send anything anywhere, because it has no internet permission.
+
+Every build is signed with the same key, so updates install over the top. You don't need to uninstall first.
+
+## ⚙️ Settings
+
+Open the Clack app or tap ⚙ in the toolbar:
+
+- Number row · word suggestions · auto-correct · automatic capitals · double-space full stop
+- Key-press pop-up · number hints on the top row
+- Vibration · key sounds
+- Theme: follow system / light / dark
+- Keyboard height: short / normal / tall
+
+## 🔍 How the spell checker works
+
+Clack uses no AI model and has no server. It combines a few simple ideas:
+
+1. **A ranked word list.** 50,000 English words ordered by how often people use them, so *the* beats *thee*.
+2. **Typo patterns.** For an unknown word it tries every one-letter mistake: swapped letters, a missing or extra letter, a missed apostrophe, or the wrong key. A wrong key **next to** the right one on the keyboard counts as more likely.
+3. **Your vocabulary.** Words you type are counted on the phone, and words you use often rank higher.
+4. **Caution.** Auto-correct only acts when the best fix clearly beats the runner-up, and never in passwords, emails or web addresses.
+
+## 🏗️ Project layout
+
+```
+app/src/main/
+├── java/com/wellsey/clack/
+│   ├── ClackIME.kt             # the input method service: connects keys to apps
+│   ├── KeyboardView.kt         # draws the keys and handles touches and gestures
+│   ├── SuggestionStripView.kt  # toolbar / suggestion bar
+│   ├── EmojiPanelView.kt       # scrolling emoji grid, categories, skin tones
+│   ├── Dictionary.kt           # completions, spell check, auto-correct, learning
+│   ├── Layouts.kt              # key layouts and colour themes
+│   ├── Icons.kt                # hand-drawn line icons
+│   ├── Prefs.kt                # settings
+│   └── SetupActivity.kt        # launcher screen: setup and settings
+└── assets/
+    ├── words.txt               # 50k English words, most common first
+    └── emoji.txt               # emoji by category
+```
+
+## 🛠️ Build it yourself
+
+Every push to `main` builds an APK with GitHub Actions. To build locally you need JDK 17 and the Android SDK:
+
+```bash
+gradle assembleDebug
+# → app/build/outputs/apk/debug/app-debug.apk
+```
+
+## 🗺️ Ideas for later
+
+- [ ] Glide typing (swipe across letters)
+- [ ] Emoji search
+- [ ] Clipboard history
+- [ ] Voice typing
+- [ ] More languages
+
+## 🙏 Credits
+
+- Word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave (code MIT; word data CC BY-SA 4.0), filtered to the 50,000 most common English words.
 - Emoji list: [unicode-emoji-json](https://github.com/muan/unicode-emoji-json) by Mu-An Chiou (MIT).
+- Inspired by Gboard. Clack isn't affiliated with or endorsed by Google.
