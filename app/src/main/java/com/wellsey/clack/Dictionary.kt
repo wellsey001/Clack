@@ -23,6 +23,9 @@ class Dictionary(context: Context) {
     @Volatile private var rank: Map<String, Int> = emptyMap()
     @Volatile private var loaded = false
 
+    /** Words you undid an auto-correction for: never auto-correct these again. */
+    private val rejected = HashSet<String>()
+
     private var cacheKey: String? = null
     private var cacheValue: List<String> = emptyList()
 
@@ -124,6 +127,46 @@ class Dictionary(context: Context) {
         return result
     }
 
+    /**
+     * The fix to apply automatically when you press space, or null if the word
+     * looks fine or no fix is clearly better than the alternatives.
+     */
+    fun autocorrection(typed: String): String? {
+        if (!loaded || typed.length < 2 || typed.length > 20) return null
+        if (!typed.all { it.isLetter() || it == '\'' }) return null
+        if (typed.length > 1 && typed.all { !it.isLetter() || it.isUpperCase() }) return null // ACRONYMS
+        val t = typed.lowercase()
+        if (isKnown(t) || t in rejected) return null
+        val scores = HashMap<String, Double>()
+        for ((cand, weight) in edits(t)) {
+            if (!isCandidate(cand)) continue
+            val sc = freqScore(cand) * weight
+            if (sc > (scores[cand] ?: 0.0)) scores[cand] = sc
+        }
+        if (scores.isEmpty() && t.length in 5..12) {
+            for ((e1, w1) in edits(t)) {
+                for ((e2, w2) in edits(e1)) {
+                    if (e2 == t || !isCandidate(e2)) continue
+                    val sc = freqScore(e2) * w1 * w2 * 0.3
+                    if (sc > (scores[e2] ?: 0.0)) scores[e2] = sc
+                }
+            }
+        }
+        val ranked = scores.entries.sortedByDescending { it.value }
+        val best = ranked.firstOrNull() ?: return null
+        val second = ranked.getOrNull(1)?.value ?: 0.0
+        val margin = if (t.length <= 3) 3.0 else 2.0
+        if (best.value < MIN_AUTOCORRECT_SCORE || best.value < second * margin) return null
+        return matchCase(best.key, typed)
+    }
+
+    /** You undid an auto-correction: leave this word alone from now on. */
+    fun reject(word: String) {
+        rejected.add(word.lowercase())
+        learn(word)
+        learn(word) // counts as known straight away
+    }
+
     private fun isCandidate(w: String) = rank.containsKey(w) || learned.containsKey(w)
 
     private fun freqScore(w: String): Double {
@@ -183,7 +226,7 @@ class Dictionary(context: Context) {
         for (i in 0..n) {
             for (c in INSERTABLE) {
                 val weight = when {
-                    c == '\'' -> 1.2
+                    c == '\'' -> 2.5
                     (i > 0 && w[i - 1] == c) || (i < n && w[i] == c) -> 0.9
                     else -> 0.6
                 }
@@ -206,6 +249,7 @@ class Dictionary(context: Context) {
     companion object {
         private const val MAX_LEARNED = 5000
         const val LEARN_THRESHOLD = 2
+        private const val MIN_AUTOCORRECT_SCORE = 30.0
         private const val LETTERS = "abcdefghijklmnopqrstuvwxyz"
         private const val INSERTABLE = "abcdefghijklmnopqrstuvwxyz'"
 

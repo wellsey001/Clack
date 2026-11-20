@@ -61,6 +61,7 @@ class SetupActivity : Activity() {
         root.addView(section("Typing"))
         root.addView(toggle("Number row", prefs.numberRow) { prefs.numberRow = it })
         root.addView(toggle("Show word suggestions", prefs.suggestions) { prefs.suggestions = it })
+        root.addView(toggle("Auto-correct when you press space", prefs.autoCorrect) { prefs.autoCorrect = it })
         root.addView(toggle("Capitalise sentences automatically", prefs.autoCaps) { prefs.autoCaps = it })
         root.addView(toggle("Double-tap space for full stop", prefs.doubleSpacePeriod) { prefs.doubleSpacePeriod = it })
         root.addView(toggle("Number hints on top row (when number row is off)", prefs.popupHints) { prefs.popupHints = it })
@@ -87,6 +88,7 @@ class SetupActivity : Activity() {
             "• Hold a key for accents and symbols, then slide to pick one\n" +
                 "• Tap a suggestion to finish or fix a word\n" +
                 "• Words you use twice are learned; long-press a suggestion to forget one\n" +
+                "• Press delete straight after an auto-correction to undo it\n" +
                 "• Long-press an emoji to pick a skin tone\n" +
                 "• Slide left from delete to delete whole words\n" +
                 "• Slide along the space bar to move the cursor\n" +

@@ -34,6 +34,10 @@ class Prefs(context: Context) {
         get() = bool("suggestions", true)
         set(v) = setBool("suggestions", v)
 
+    var autoCorrect: Boolean
+        get() = bool("auto_correct", true)
+        set(v) = setBool("auto_correct", v)
+
     var keyPreview: Boolean
         get() = bool("key_preview", true)
         set(v) = setBool("key_preview", v)

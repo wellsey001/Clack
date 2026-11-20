@@ -39,6 +39,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     /** True right after a suggestion added its own space (so "." can replace it). */
     private var autoSpaced = false
+
+    /** Last auto-correction, so pressing delete straight after can undo it. */
+    private class Undo(val original: String, val tail: String)
+    private var undo: Undo? = null
     private var suggestionsAllowed = true
 
     private var selStart = -1
@@ -243,6 +247,22 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         return before.substring(i).trimStart('\'')
     }
 
+    /** (typed word, fix) if the word before the cursor should be auto-corrected. */
+    private fun autoCorrection(ic: InputConnection): Pair<String, String>? {
+        if (!prefs.autoCorrect || !suggestionsAllowed) return null
+        val word = currentWord(ic)
+        if (word.isEmpty()) return null
+        val fix = dictionary.autocorrection(word) ?: return null
+        return word to fix
+    }
+
+    private fun replaceBeforeCursor(ic: InputConnection, length: Int, text: String) {
+        ic.beginBatchEdit()
+        ic.deleteSurroundingText(length, 0)
+        ic.commitText(text, 1)
+        ic.endBatchEdit()
+    }
+
     private fun learnCurrentWord(ic: InputConnection) {
         if (!suggestionsAllowed) return
         val w = currentWord(ic)
@@ -279,8 +299,19 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val ic = currentInputConnection ?: return
         val wasAutoSpaced = autoSpaced
         autoSpaced = false
+        val pendingUndo = undo
+        undo = null
         when (key.code) {
-            Key.DELETE -> sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+            Key.DELETE -> {
+                val tail = pendingUndo?.tail
+                if (pendingUndo != null && ic.getTextBeforeCursor(tail!!.length, 0)?.toString() == tail) {
+                    // Undo the auto-correction and stop correcting that word.
+                    replaceBeforeCursor(ic, tail.length, pendingUndo.original)
+                    dictionary.reject(pendingUndo.original)
+                } else {
+                    sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
+                }
+            }
             Key.SHIFT -> toggleShift()
             Key.TO_SYMBOLS -> mode = Mode.SYMBOLS
             Key.TO_MORE -> mode = Mode.MORE
@@ -290,17 +321,30 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 updateAutoShift()
             }
             Key.ENTER -> {
-                learnCurrentWord(ic)
+                val fix = autoCorrection(ic)
+                if (fix != null) replaceBeforeCursor(ic, fix.first.length, fix.second)
+                else learnCurrentWord(ic)
                 handleEnter(ic)
             }
             Key.SPACE -> {
-                learnCurrentWord(ic)
-                handleSpace(ic)
+                val fix = autoCorrection(ic)
+                if (fix != null) {
+                    replaceBeforeCursor(ic, fix.first.length, fix.second + " ")
+                    undo = Undo(fix.first, fix.second + " ")
+                    lastSpaceTap = SystemClock.uptimeMillis()
+                } else {
+                    learnCurrentWord(ic)
+                    handleSpace(ic)
+                }
             }
             else -> {
                 val punct = key.text.length == 1 && key.text[0] in PUNCTUATION
-                if (punct) learnCurrentWord(ic)
-                if (punct && wasAutoSpaced) {
+                val fix = if (punct) autoCorrection(ic) else null
+                if (punct && fix == null) learnCurrentWord(ic)
+                if (fix != null) {
+                    replaceBeforeCursor(ic, fix.first.length, fix.second + key.text)
+                    undo = Undo(fix.first, fix.second + key.text)
+                } else if (punct && wasAutoSpaced) {
                     // "hello |" + "." → "hello. " like Gboard
                     val before = ic.getTextBeforeCursor(1, 0)
                     if (before != null && before.toString() == " ") {
@@ -323,6 +367,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     override fun onPopupText(text: String) {
         val ic = currentInputConnection ?: return
         autoSpaced = false
+        undo = null
         commitText(ic, text)
         lastSpaceTap = 0
         render()
