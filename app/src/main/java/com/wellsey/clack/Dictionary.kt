@@ -22,6 +22,8 @@ class Dictionary(context: Context) {
     @Volatile private var words: Array<String> = emptyArray()
     @Volatile private var rank: Map<String, Int> = emptyMap()
     @Volatile private var loaded = false
+    /** "isnt" → "isn't", "im" → "i'm", "ill" → "i'll" … */
+    @Volatile private var contractionOf: Map<String, String> = emptyMap()
 
     /** Words you undid an auto-correction for: never auto-correct these again. */
     private val rejected = HashSet<String>()
@@ -48,6 +50,9 @@ class Dictionary(context: Context) {
                 list.forEachIndexed { i, w -> r.putIfAbsent(w, i) }
                 val sorted = list.toTypedArray()
                 Arrays.sort(sorted)
+                val c = HashMap<String, String>()
+                for (w in list) if ('\'' in w) c.putIfAbsent(w.replace("'", ""), w)
+                contractionOf = c
                 rank = r
                 words = sorted
                 loaded = true
@@ -60,8 +65,13 @@ class Dictionary(context: Context) {
     fun isKnown(word: String): Boolean {
         if (!loaded) return true // don't flag everything while still loading
         val w = word.lowercase()
-        return rank.containsKey(w) || (learned[w] ?: 0) >= LEARN_THRESHOLD
+        if (rank.containsKey(w)) return true
+        if (isMissingApostrophe(w)) return false
+        return (learned[w] ?: 0) >= LEARN_THRESHOLD
     }
+
+    /** True for "isnt", "dont", "im": a contraction typed without its apostrophe. */
+    private fun isMissingApostrophe(w: String) = !rank.containsKey(w) && contractionOf.containsKey(w)
 
     fun isLearned(word: String) = learned.containsKey(word.lowercase())
 
@@ -69,6 +79,7 @@ class Dictionary(context: Context) {
         if (word.length < 2 || word.length > 32) return
         if (!word.all { it.isLetter() || it == '\'' }) return
         val w = word.lowercase()
+        if (isMissingApostrophe(w)) return // never learn "isnt" as a word
         learned[w] = (learned[w] ?: 0) + 1
         dirty = true
         cacheKey = null
@@ -96,6 +107,13 @@ class Dictionary(context: Context) {
         val scores = HashMap<String, Double>()
         if (t.isNotEmpty()) {
             addCompletions(t, scores)
+            // Always offer the apostrophe version: "isnt" → "isn't", "ill" → "I'll".
+            contractionOf[t.replace("'", "")]?.let { c ->
+                if (c != t) {
+                    val sc = freqScore(c) * (if (isKnown(t)) 0.6 else 5.0)
+                    if (sc > (scores[c] ?: 0.0)) scores[c] = sc
+                }
+            }
             if (loaded && !isKnown(t)) {
                 var found = false
                 for ((cand, weight) in edits(t)) {
@@ -137,6 +155,8 @@ class Dictionary(context: Context) {
         if (typed.length > 1 && typed.all { !it.isLetter() || it.isUpperCase() }) return null // ACRONYMS
         val t = typed.lowercase()
         if (isKnown(t) || t in rejected) return null
+        // A contraction missing its apostrophe is always fixed: "isnt" → "isn't", "im" → "I'm".
+        if (isMissingApostrophe(t)) contractionOf[t]?.let { return matchCase(it, typed) }
         val scores = HashMap<String, Double>()
         for ((cand, weight) in edits(t)) {
             if (!isCandidate(cand)) continue
@@ -167,7 +187,8 @@ class Dictionary(context: Context) {
         learn(word) // counts as known straight away
     }
 
-    private fun isCandidate(w: String) = rank.containsKey(w) || learned.containsKey(w)
+    private fun isCandidate(w: String) =
+        rank.containsKey(w) || (learned.containsKey(w) && !isMissingApostrophe(w))
 
     private fun freqScore(w: String): Double {
         val r = rank[w]
@@ -187,7 +208,9 @@ class Dictionary(context: Context) {
             n++
         }
         for (w in learned.keys) {
-            if (w.length > p.length && w.startsWith(p)) scores[w] = completionScore(w, p.length)
+            if (w.length > p.length && w.startsWith(p) && !isMissingApostrophe(w)) {
+                scores[w] = completionScore(w, p.length)
+            }
         }
     }
 
@@ -239,6 +262,8 @@ class Dictionary(context: Context) {
     fun save() {
         if (!dirty) return
         try {
+            // Drop any "isnt"-style words learned before contractions were in the dictionary.
+            if (loaded) learned.keys.removeAll { isMissingApostrophe(it) }
             val top = learned.entries.sortedByDescending { it.value }.take(MAX_LEARNED)
             file.writeText(top.joinToString("\n") { "${it.key}\t${it.value}" })
             dirty = false
