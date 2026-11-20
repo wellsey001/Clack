@@ -67,6 +67,8 @@ class SetupActivity : Activity() {
         root.addView(toggle("Number row", prefs.numberRow) { prefs.numberRow = it })
         root.addView(toggle("Show word suggestions", prefs.suggestions) { prefs.suggestions = it })
         root.addView(toggle("Auto-correct when you press space", prefs.autoCorrect) { prefs.autoCorrect = it })
+        root.addView(toggle("Suggest the next word", prefs.predictions) { prefs.predictions = it })
+        root.addView(toggle("Capitalise I, days, months and names", prefs.autoCapWords) { prefs.autoCapWords = it })
         root.addView(toggle("Capitalise sentences automatically", prefs.autoCaps) { prefs.autoCaps = it })
         root.addView(toggle("Double-tap space for full stop", prefs.doubleSpacePeriod) { prefs.doubleSpacePeriod = it })
         root.addView(toggle("Number hints on top row (when number row is off)", prefs.popupHints) { prefs.popupHints = it })
@@ -109,6 +111,25 @@ class SetupActivity : Activity() {
             root.addView(body("Copying a code also works, with or without notification access."))
         }
 
+        root.addView(section("Updates"))
+        val version = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (_: Exception) {
+            "?"
+        }
+        root.addView(body("You have Clack $version. New versions install over this one and keep your settings and learned words."))
+        root.addView(Button(this).apply {
+            text = "Download the latest version"
+            setOnClickListener {
+                // Opens in your browser: Clack itself has no internet access.
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LATEST_APK)))
+            }
+        }, fullWidth(top = 6))
+        root.addView(Button(this).apply {
+            text = "What's new"
+            setOnClickListener { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES))) }
+        }, fullWidth(top = 2))
+
         root.addView(section("Theme"))
         root.addView(radio(
             listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"),
@@ -128,6 +149,8 @@ class SetupActivity : Activity() {
                 "• Words you use twice are learned; long-press a suggestion to forget one\n" +
                 "• Press delete straight after an auto-correction to undo it\n" +
                 "• Long-press an emoji to pick a skin tone\n" +
+                "• Tap 🔍 in the emoji panel to search (try \"pizza\" or \"love\")\n" +
+                "• Names you write with a capital twice are capitalised for you\n" +
                 "• Slide left from delete to delete whole words\n" +
                 "• Slide along the space bar to move the cursor\n" +
                 "• Hold the space bar to switch to another keyboard\n" +
@@ -253,5 +276,10 @@ class SetupActivity : Activity() {
             if (v != null) onPick(v)
         }
         return group
+    }
+
+    companion object {
+        private const val LATEST_APK = "https://github.com/wellsey001/Clack/releases/latest/download/Clack.apk"
+        private const val RELEASES = "https://github.com/wellsey001/Clack/releases"
     }
 }

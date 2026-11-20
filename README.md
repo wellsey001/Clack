@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/wellsey001/Clack/releases/latest"><img src="https://img.shields.io/github/v/release/wellsey001/Clack?label=latest&color=0b57d0" alt="Latest release"></a>
   <a href="https://github.com/wellsey001/Clack/actions/workflows/build.yml"><img src="https://github.com/wellsey001/Clack/actions/workflows/build.yml/badge.svg" alt="Build APK"></a>
   <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 8.0+">
   <img src="https://img.shields.io/badge/Kotlin-100%25-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin">
@@ -25,8 +26,11 @@
 | ⌨️ **Feels like Gboard** | Material You colours, flat keys, a pill-shaped enter key and light/dark themes that follow your system. |
 | 🔤 **Spell check** | Misspelt words get a fix in the middle of the suggestion bar: *teh → the*, *recieve → receive*, *dont → don't*. |
 | ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |
+| 🔮 **Next-word prediction** | After a space, Clack suggests what usually comes next: *see you* → **soon**, *on my* → **way**. It learns your own phrases too. |
+| 🔠 **Smart capitals** | *i* → **I**, *monday* → **Monday**, and names you write with a capital, like *sarah* → **Sarah**. Press delete to undo. |
 | 🧠 **Learns your words** | Type a word twice and Clack treats it as correct and suggests it. Names, slang and in-jokes included. |
-| 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. |
+| 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. **Search** by name (*pizza*, *love*, *cat*). |
+| ¯\\\_(ツ)\_/¯ **Emoticons and kaomoji** | Tabs of classic `:)` `<3` `^_^` faces and kaomoji, one tap away. |
 | 🔑 **Sign-in codes** | A "Paste code" button appears when a verification code arrives in a notification or is copied. It's held in memory for 5 minutes and never saved. |
 | 🔒 **Private by design** | No internet permission, no analytics, no accounts. Nothing is learned from passwords, emails, web addresses or incognito tabs. |
 | 🪶 **Tiny** | About 1 MB, pure Kotlin, zero third-party libraries. |
@@ -45,14 +49,18 @@
 | **Delete** right after an auto-correct | Undo it, and never correct that word again |
 | **Hold** a suggestion | Forget a word Clack learned |
 | **Hold** an emoji | Pick a skin tone |
+| Tap 🔍 in the emoji panel | Search emoji by name |
+| Tap a suggestion after a space | Accept the predicted next word |
 | Tap **Paste code** in the top bar | Paste a sign-in code that just arrived (✕ to dismiss) |
 | Type `.` `,` `!` `?` after picking a suggestion | The extra space goes after the punctuation, as in Gboard |
 
 ## 📲 Install
 
-1. Open the latest successful run on the [**Actions**](https://github.com/wellsey001/Clack/actions/workflows/build.yml) page.
-2. Download **Clack-apk** from *Artifacts*, unzip it and install the APK.
+1. On your phone, download **[Clack.apk](https://github.com/wellsey001/Clack/releases/latest/download/Clack.apk)**. This link always points to the newest version.
+2. Open the file to install it. Allow your browser to install apps if Android asks.
 3. Open **Clack** and follow the two steps: **Enable** it, then **Switch** to it.
+
+**Updating:** in Clack's settings, tap **Download the latest version**. Every change gets its own [release](https://github.com/wellsey001/Clack/releases) with notes on what's new.
 
 > Android shows a standard warning that a keyboard "may be able to collect all the text you type".
 > Every keyboard gets this warning. Clack can't send anything anywhere, because it has no internet permission.
@@ -120,7 +128,6 @@ gradle assembleDebug
 ## 🗺️ Ideas for later
 
 - [ ] Glide typing (swipe across letters)
-- [ ] Emoji search
 - [ ] Clipboard history
 - [ ] Voice typing
 - [ ] More languages
@@ -129,4 +136,5 @@ gradle assembleDebug
 
 - Word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave (code MIT; word data CC BY-SA 4.0), filtered to the 50,000 most common English words.
 - Emoji list: [unicode-emoji-json](https://github.com/muan/unicode-emoji-json) by Mu-An Chiou (MIT).
+- Emoji search keywords: [emojilib](https://github.com/muan/emojilib) by Mu-An Chiou (MIT).
 - Inspired by Gboard. Clack isn't affiliated with or endorsed by Google.

@@ -17,6 +17,14 @@ class Dictionary(context: Context) {
     private val appContext = context.applicationContext
     private val file = File(appContext.filesDir, "learned_words.tsv")
     private val learned = HashMap<String, Int>()
+
+    /** "see you" → {"soon": 3, …}: which words you write after which. */
+    private val pairs = HashMap<String, HashMap<String, Int>>()
+    private val pairsFile = File(appContext.filesDir, "learned_pairs.tsv")
+
+    /** "sarah" → ("Sarah", times you've written it that way mid-sentence). */
+    private val caps = HashMap<String, Pair<String, Int>>()
+    private val capsFile = File(appContext.filesDir, "learned_caps.tsv")
     private var dirty = false
 
     @Volatile private var words: Array<String> = emptyArray()
@@ -42,6 +50,21 @@ class Dictionary(context: Context) {
                 file.forEachLine { line ->
                     val parts = line.split('\t')
                     if (parts.size == 2) parts[1].toIntOrNull()?.let { learned[parts[0]] = it }
+                }
+            }
+        } catch (_: Exception) {
+        }
+        try {
+            if (pairsFile.exists()) {
+                pairsFile.forEachLine { line ->
+                    val p = line.split('\t')
+                    if (p.size == 3) p[2].toIntOrNull()?.let { pairs.getOrPut(p[0]) { HashMap() }[p[1]] = it }
+                }
+            }
+            if (capsFile.exists()) {
+                capsFile.forEachLine { line ->
+                    val p = line.split('\t')
+                    if (p.size == 3) p[2].toIntOrNull()?.let { caps[p[0]] = p[1] to it }
                 }
             }
         } catch (_: Exception) {
@@ -113,8 +136,8 @@ class Dictionary(context: Context) {
      * and, if it doesn't look like a real word, spelling fixes ("teh" → "the").
      */
     @Synchronized
-    fun suggest(typed: String, limit: Int): List<String> {
-        val key = "$typed|$limit|$loaded"
+    fun suggest(typed: String, limit: Int, prev2: String? = null, prev: String? = null): List<String> {
+        val key = "$typed|$limit|$loaded|$prev2|$prev"
         if (key == cacheKey) return cacheValue
         val t = typed.lowercase()
         val scores = HashMap<String, Double>()
@@ -141,6 +164,8 @@ class Dictionary(context: Context) {
             }
         }
         scores.remove(t)
+        // Words that usually follow the previous one get a boost ("see you" + "s…" → "soon").
+        if (prev != null) for (e in scores.entries) e.setValue(e.value * pairBonus(prev2, prev, e.key))
         val result = scores.entries
             .sortedWith(compareByDescending<Map.Entry<String, Double>> { it.value }.thenBy { it.key.length })
             .take(limit)
@@ -313,6 +338,78 @@ class Dictionary(context: Context) {
         return out
     }
 
+    // ---- next-word prediction ---------------------------------------------
+
+    /** Remember that [next] followed [prev] (and "[prev2] [prev]"). */
+    @Synchronized
+    fun learnPair(prev2: String?, prev: String, next: String) {
+        val n = next.lowercase()
+        if (n.isEmpty() || !n.all { it.isLetter() || it == '\'' } || isMissingApostrophe(n)) return
+        bump(prev, n)
+        if (prev2 != null && prev != StarterPredictions.START) bump("$prev2 $prev", n)
+        dirty = true
+        cacheKey = null
+    }
+
+    private fun bump(key: String, next: String) {
+        val m = pairs.getOrPut(key) { HashMap() }
+        m[next] = (m[next] ?: 0) + 1
+    }
+
+    /** Likely next words after "[prev2] [prev]", best first. */
+    @Synchronized
+    fun predict(prev2: String?, prev: String, limit: Int): List<String> {
+        val scores = HashMap<String, Double>()
+        fun addFrom(key: String, weight: Double) {
+            pairs[key]?.forEach { (w, c) -> scores[w] = (scores[w] ?: 0.0) + c * 10.0 * weight }
+            StarterPredictions.table[key]?.forEachIndexed { i, w ->
+                scores[w] = (scores[w] ?: 0.0) + (6.0 - i * 0.5).coerceAtLeast(1.0) * weight
+            }
+        }
+        if (prev2 != null && prev != StarterPredictions.START) addFrom("$prev2 $prev", 3.0)
+        addFrom(prev, 1.0)
+        return scores.entries.sortedByDescending { it.value }
+            .map { it.key }
+            .filter { !isMissingApostrophe(it) }
+            .take(limit)
+            .map { capitalisation(it) ?: it }
+    }
+
+    private fun pairBonus(prev2: String?, prev: String, cand: String): Double {
+        var b = 0.0
+        pairs[prev]?.get(cand)?.let { b += it * 0.5 }
+        if (prev2 != null) pairs["$prev2 $prev"]?.get(cand)?.let { b += it.toDouble() }
+        if (StarterPredictions.table[prev]?.contains(cand) == true) b += 1.0
+        return 1.0 + b.coerceAtMost(8.0)
+    }
+
+    // ---- capitalisation ------------------------------------------------------
+
+    /** You wrote [word] with a capital in the middle of a sentence, e.g. a name. */
+    @Synchronized
+    fun learnCapitalised(word: String) {
+        if (word.length < 2 || !word[0].isUpperCase()) return
+        if (word.all { !it.isLetter() || it.isUpperCase() }) return // ALL CAPS
+        if (!word.all { it.isLetter() || it == '\'' || it == '-' }) return
+        val lower = word.lowercase()
+        if (lower == "i" || lower.startsWith("i'")) return
+        val old = caps[lower]
+        caps[lower] = word to ((if (old?.first == word) old.second else 0) + 1)
+        dirty = true
+    }
+
+    /** "i" → "I", "monday" → "Monday", "sarah" → "Sarah" once you've written it that way twice. */
+    @Synchronized
+    fun capitalisation(word: String): String? {
+        if (word.isEmpty() || word.any { it.isUpperCase() }) return null
+        if (word in rejected) return null
+        if (word == "i") return "I"
+        if (word.startsWith("i'") && rank.containsKey(word)) return "I" + word.substring(1)
+        ALWAYS_CAPS[word]?.let { return it }
+        caps[word]?.let { (form, count) -> if (count >= LEARN_THRESHOLD) return form }
+        return null
+    }
+
     @Synchronized
     fun save() {
         if (!dirty) return
@@ -321,6 +418,10 @@ class Dictionary(context: Context) {
             if (loaded) learned.keys.removeAll { isMissingApostrophe(it) }
             val top = learned.entries.sortedByDescending { it.value }.take(MAX_LEARNED)
             file.writeText(top.joinToString("\n") { "${it.key}\t${it.value}" })
+            val topPairs = pairs.flatMap { (k, m) -> m.map { (w, c) -> Triple(k, w, c) } }
+                .sortedByDescending { it.third }.take(MAX_PAIRS)
+            pairsFile.writeText(topPairs.joinToString("\n") { "${it.first}\t${it.second}\t${it.third}" })
+            capsFile.writeText(caps.entries.joinToString("\n") { "${it.key}\t${it.value.first}\t${it.value.second}" })
             dirty = false
         } catch (_: Exception) {
         }
@@ -328,6 +429,18 @@ class Dictionary(context: Context) {
 
     companion object {
         private const val MAX_LEARNED = 5000
+        private const val MAX_PAIRS = 20000
+
+        /** Always capitalised. ("may" and "march" are left out: they're ordinary words too.) */
+        private val ALWAYS_CAPS: Map<String, String> = HashMap<String, String>().apply {
+            ("monday tuesday wednesday thursday friday saturday sunday january february april june " +
+                "july august september october november december christmas easter english british " +
+                "england scotland wales ireland britain london europe european").split(' ')
+                .forEach { put(it, it.replaceFirstChar { c -> c.uppercase() }) }
+            put("uk", "UK")
+            put("usa", "USA")
+            put("tv", "TV")
+        }
         const val LEARN_THRESHOLD = 2
         private const val MIN_AUTOCORRECT_SCORE = 30.0
         private const val LETTERS = "abcdefghijklmnopqrstuvwxyz"

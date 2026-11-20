@@ -11,8 +11,10 @@ android {
         applicationId = "com.wellsey.clack"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // GitHub Actions sets the build number, so every build installs as a newer version.
+        val build = (System.getenv("GITHUB_RUN_NUMBER") ?: "0").toInt()
+        versionCode = 100 + build
+        versionName = "1.0.$build"
     }
 
     signingConfigs {

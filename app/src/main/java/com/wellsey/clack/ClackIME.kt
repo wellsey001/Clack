@@ -22,15 +22,26 @@ import android.widget.Toast
 import kotlin.math.abs
 
 class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripView.Listener,
-    EmojiPanelView.Listener {
+    EmojiPanelView.Listener, EmojiSearchView.Listener {
 
-    private enum class Mode { LETTERS, SYMBOLS, MORE, EMOJI }
+    private enum class Mode { LETTERS, SYMBOLS, MORE, EMOJI, SEARCH }
+
+    /** What's before the cursor: the word being typed and the one or two words before it. */
+    private class Ctx(
+        val prev2: String?,
+        val prev: String,
+        val word: String,
+        val afterSpace: Boolean,
+        val fieldStart: Boolean,
+    )
 
     private lateinit var prefs: Prefs
     private lateinit var dictionary: Dictionary
     private var keyboard: KeyboardView? = null
     private var strip: SuggestionStripView? = null
     private var emojiPanel: EmojiPanelView? = null
+    private var searchView: EmojiSearchView? = null
+    private var searchQuery = ""
 
     private var mode = Mode.LETTERS
     private var shift = ShiftState.OFF
@@ -108,11 +119,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val s = SuggestionStripView(this, this)
         val k = KeyboardView(this, this)
         val e = EmojiPanelView(this, this).apply { visibility = View.GONE }
+        val q = EmojiSearchView(this, this).apply { visibility = View.GONE }
         strip = s
         keyboard = k
         emojiPanel = e
+        searchView = q
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(q)
             addView(s)
             addView(e)
             addView(k)
@@ -209,6 +223,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         kb.palette = palette
         strip?.palette = palette
         emojiPanel?.palette = palette
+        searchView?.palette = palette
 
         val baseDp = when (prefs.height) {
             "short" -> 46f
@@ -239,7 +254,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     private fun render() {
         val kb = keyboard ?: return
-        kb.lettersMode = mode == Mode.LETTERS
+        val searching = mode == Mode.SEARCH
+        kb.lettersMode = mode == Mode.LETTERS || searching
         kb.shiftState = shift
         kb.showHints = prefs.popupHints && !prefs.numberRow
         kb.rows = when (mode) {
@@ -247,7 +263,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             Mode.SYMBOLS -> Layouts.symbols
             Mode.MORE -> Layouts.more
             Mode.EMOJI -> Layouts.emojiBottom
+            Mode.SEARCH -> Layouts.letters
         }
+        searchView?.visibility = if (searching) View.VISIBLE else View.GONE
+        strip?.visibility = if (searching) View.GONE else View.VISIBLE
         emojiPanel?.let { panel ->
             if (mode == Mode.EMOJI) {
                 // Same overall height as the letters, so nothing jumps when switching.
@@ -265,8 +284,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     private fun updateStrip() {
         val s = strip ?: return
+        if (mode == Mode.SEARCH) return
         val ic = currentInputConnection
-        val word = if (ic != null && suggestionsAllowed && mode != Mode.EMOJI) currentWord(ic) else ""
+        val ctx = if (ic != null && suggestionsAllowed && mode != Mode.EMOJI) readContext(ic) else null
+        val word = ctx?.word ?: ""
         val request = ++stripRequest
         val code = if (prefs.otpCodes && mode != Mode.EMOJI) OtpStore.current() else null
         s.otpCode = code
@@ -276,11 +297,25 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         }
         if (word.isEmpty()) {
             s.suggestions = null
+            // Next-word predictions after a space (not in an empty box, so the toolbar stays handy).
+            if (ctx == null || code != null || !prefs.predictions || !ctx.afterSpace || ctx.fieldStart) return
+            val capFirst = shift != ShiftState.OFF
+            dictHandler.post {
+                val preds = dictionary.predict(ctx.prev2, ctx.prev, 3)
+                    .map { if (capFirst) it.replaceFirstChar { c -> c.uppercase() } else it }
+                uiHandler.post {
+                    if (request != stripRequest || preds.isEmpty()) return@post
+                    s.quoteLeft = false
+                    s.suggestions = listOf(preds.getOrNull(1), preds[0], preds.getOrNull(2))
+                }
+            }
             return
         }
         val warmAutoCorrect = prefs.autoCorrect && autoCorrectAllowed
+        val prev2 = ctx?.prev2
+        val prev = ctx?.prev
         dictHandler.post {
-            val best = dictionary.suggest(word, 2)
+            val best = dictionary.suggest(word, 2, prev2, prev)
             val known = dictionary.isKnown(word)
             if (warmAutoCorrect) dictionary.autocorrection(word) // ready for when space is pressed
             uiHandler.post {
@@ -298,25 +333,71 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     }
 
     /** The word directly before the cursor (empty if there's a selection). */
-    private fun currentWord(ic: InputConnection): String {
+    private fun currentWord(ic: InputConnection): String = readContext(ic)?.word ?: ""
+
+    /** Reads the text before the cursor once: current word plus the words before it. */
+    private fun readContext(ic: InputConnection): Ctx? {
         // Ask the app directly: some apps report the cursor late, so our own
         // record of the selection can be stale.
-        if (selStart != selEnd && !ic.getSelectedText(0).isNullOrEmpty()) return ""
-        val before = ic.getTextBeforeCursor(48, 0) ?: return ""
+        if (selStart != selEnd && !ic.getSelectedText(0).isNullOrEmpty()) return null
+        val before = ic.getTextBeforeCursor(80, 0)?.toString() ?: return null
         var i = before.length
         while (i > 0 && (before[i - 1].isLetter() || isApostrophe(before[i - 1]))) i--
         // Some apps turn ' into a curly ’; treat both the same.
-        return before.substring(i).trimStart('\'', '’').replace('’', '\'')
+        val word = before.substring(i).trimStart('\'', '’').replace('’', '\'')
+        val rest = before.substring(0, i)
+        val (prev2, prev) = previousWords(rest)
+        return Ctx(
+            prev2 = prev2,
+            prev = prev,
+            word = word,
+            afterSpace = word.isEmpty() && (rest.endsWith(" ") || rest.endsWith("\n")),
+            fieldStart = before.isBlank(),
+        )
+    }
+
+    /** The one or two words before [rest], or START where a sentence begins. */
+    private fun previousWords(rest: String): Pair<String?, String> {
+        val start = StarterPredictions.START
+        var j = rest.length
+        while (j > 0 && !(rest[j - 1].isLetter() || isApostrophe(rest[j - 1]))) {
+            if (rest[j - 1] in ".!?\n") return null to start
+            j--
+        }
+        if (j == 0) return null to start
+        var k = j
+        while (k > 0 && (rest[k - 1].isLetter() || isApostrophe(rest[k - 1]))) k--
+        val prev = rest.substring(k, j).replace('’', '\'').lowercase()
+        var m = k
+        while (m > 0 && rest[m - 1] == ' ') m--
+        if (m == 0 || !(rest[m - 1].isLetter() || isApostrophe(rest[m - 1]))) return null to prev
+        var n = m
+        while (n > 0 && (rest[n - 1].isLetter() || isApostrophe(rest[n - 1]))) n--
+        return rest.substring(n, m).replace('’', '\'').lowercase() to prev
     }
 
     private fun isApostrophe(c: Char) = c == '\'' || c == '’'
 
-    /** (typed word, fix) if the word before the cursor should be auto-corrected. */
-    private fun autoCorrection(word: String): Pair<String, String>? {
-        if (!prefs.autoCorrect || !autoCorrectAllowed) return null
-        if (word.isEmpty()) return null
-        val fix = dictionary.autocorrection(word) ?: return null
-        return word to fix
+    /**
+     * (typed word, fix) if the word before the cursor should change when you press
+     * space: a spelling fix ("teh" → "the") and/or a capital ("i" → "I", "monday" → "Monday").
+     */
+    private fun autoFix(word: String): Pair<String, String>? {
+        if (word.isEmpty() || !autoCorrectAllowed) return null
+        val corrected = if (prefs.autoCorrect) dictionary.autocorrection(word) else null
+        val base = corrected ?: word
+        val capped = if (prefs.autoCapWords) dictionary.capitalisation(base) else null
+        val result = capped ?: corrected ?: return null
+        return if (result == word) null else word to result
+    }
+
+    /** Learn which word followed which, and names you capitalise mid-sentence. */
+    private fun learnContext(ctx: Ctx?, finalWord: String, typedAsIs: Boolean) {
+        if (!learningAllowed || ctx == null || finalWord.isEmpty()) return
+        dictionary.learnPair(ctx.prev2, ctx.prev, finalWord)
+        if (typedAsIs && ctx.prev != StarterPredictions.START && finalWord[0].isUpperCase()) {
+            dictionary.learnCapitalised(finalWord)
+        }
     }
 
     private fun replaceBeforeCursor(ic: InputConnection, length: Int, text: String) {
@@ -361,6 +442,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     }
 
     override fun onKey(key: Key) {
+        if (mode == Mode.SEARCH) {
+            handleSearchKey(key)
+            return
+        }
         val ic = currentInputConnection ?: return
         val wasAutoSpaced = autoSpaced
         autoSpaced = false
@@ -387,15 +472,18 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 updateAutoShift()
             }
             Key.ENTER -> {
-                val word = if (suggestionsAllowed) currentWord(ic) else ""
-                val fix = autoCorrection(word)
+                val ctx = if (suggestionsAllowed) readContext(ic) else null
+                val word = ctx?.word ?: ""
+                val fix = autoFix(word)
                 if (fix != null) replaceBeforeCursor(ic, fix.first.length, fix.second)
                 else learnWord(word)
+                learnContext(ctx, fix?.second ?: word, typedAsIs = fix == null)
                 handleEnter(ic)
             }
             Key.SPACE -> {
-                val word = if (suggestionsAllowed) currentWord(ic) else ""
-                val fix = autoCorrection(word)
+                val ctx = if (suggestionsAllowed) readContext(ic) else null
+                val word = ctx?.word ?: ""
+                val fix = autoFix(word)
                 if (fix != null) {
                     replaceBeforeCursor(ic, fix.first.length, fix.second + " ")
                     undo = Undo(fix.first, fix.second + " ")
@@ -404,12 +492,15 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                     learnWord(word)
                     handleSpace(ic)
                 }
+                learnContext(ctx, fix?.second ?: word, typedAsIs = fix == null)
             }
             else -> {
                 val punct = key.text.length == 1 && key.text[0] in PUNCTUATION
-                val word = if (punct && suggestionsAllowed) currentWord(ic) else ""
-                val fix = if (punct) autoCorrection(word) else null
+                val ctx = if (punct && suggestionsAllowed) readContext(ic) else null
+                val word = ctx?.word ?: ""
+                val fix = if (punct) autoFix(word) else null
                 if (punct && fix == null) learnWord(word)
+                if (punct) learnContext(ctx, fix?.second ?: word, typedAsIs = fix == null)
                 if (fix != null) {
                     replaceBeforeCursor(ic, fix.first.length, fix.second + key.text)
                     undo = Undo(fix.first, fix.second + key.text)
@@ -436,6 +527,11 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     }
 
     override fun onPopupText(text: String) {
+        if (mode == Mode.SEARCH) {
+            searchQuery += text.lowercase()
+            updateSearch()
+            return
+        }
         val ic = currentInputConnection ?: return
         autoSpaced = false
         undo = null
@@ -445,6 +541,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     }
 
     override fun onCursorMove(steps: Int) {
+        if (mode == Mode.SEARCH) return
         val code = if (steps > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
         repeat(abs(steps)) { sendDownUpKeyEvents(code) }
     }
@@ -456,6 +553,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     // ---- delete swipe: slide left from delete to select whole words -------
 
     override fun onDeleteSwipe(words: Int) {
+        if (mode == Mode.SEARCH) return
         val ic = currentInputConnection ?: return
         if (swipeBefore == null) {
             swipeBefore = ic.getTextBeforeCursor(1000, 0) ?: ""
@@ -490,12 +588,16 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     override fun onSuggestionPicked(word: String) {
         val ic = currentInputConnection ?: return
-        val typed = currentWord(ic)
+        val ctx = readContext(ic)
+        val typed = ctx?.word ?: ""
         ic.beginBatchEdit()
         if (typed.isNotEmpty()) ic.deleteSurroundingText(typed.length, 0)
         ic.commitText("$word ", 1)
         ic.endBatchEdit()
-        if (learningAllowed) dictionary.learn(word)
+        if (learningAllowed) {
+            dictionary.learn(word)
+            learnContext(ctx, word, typedAsIs = false)
+        }
         if (shift == ShiftState.ON) shift = ShiftState.OFF
         autoSpaced = true
         lastSpaceTap = 0
@@ -558,6 +660,54 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             null
         }
         OtpDetector.fromClipboard(text)?.let { OtpStore.offer(it) }
+    }
+
+    // ---- emoji search -------------------------------------------------------
+
+    override fun onEmojiSearchRequested() {
+        mode = Mode.SEARCH
+        searchQuery = ""
+        shift = ShiftState.OFF
+        updateSearch()
+        render()
+    }
+
+    override fun onSearchBack() = closeSearch()
+
+    override fun onSearchClear() {
+        searchQuery = ""
+        updateSearch()
+    }
+
+    override fun onSearchResult(emoji: String) {
+        currentInputConnection?.commitText(emoji, 1)
+        emojiPanel?.remember(emoji)
+    }
+
+    private fun closeSearch() {
+        openEmoji()
+        render()
+    }
+
+    /** Keys type into the search box (not the app) while searching. */
+    private fun handleSearchKey(key: Key) {
+        when (key.code) {
+            Key.TEXT -> searchQuery += key.text.lowercase()
+            Key.DELETE -> searchQuery = searchQuery.dropLast(1)
+            Key.SPACE -> if (searchQuery.isNotEmpty() && !searchQuery.endsWith(" ")) searchQuery += " "
+            Key.ENTER, Key.TO_SYMBOLS, Key.EMOJI -> {
+                closeSearch()
+                return
+            }
+            else -> return
+        }
+        updateSearch()
+    }
+
+    private fun updateSearch() {
+        val v = searchView ?: return
+        v.query = searchQuery
+        v.results = emojiPanel?.search(searchQuery) ?: emptyList()
     }
 
     private fun openEmoji() {

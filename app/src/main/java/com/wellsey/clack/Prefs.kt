@@ -43,6 +43,15 @@ class Prefs(context: Context) {
         get() = bool("otp_codes", true)
         set(v) = setBool("otp_codes", v)
 
+    var predictions: Boolean
+        get() = bool("predictions", true)
+        set(v) = setBool("predictions", v)
+
+    /** "i" → "I", days, months and names you write with a capital. */
+    var autoCapWords: Boolean
+        get() = bool("auto_cap_words", true)
+        set(v) = setBool("auto_cap_words", v)
+
     var keyPreview: Boolean
         get() = bool("key_preview", true)
         set(v) = setBool("key_preview", v)

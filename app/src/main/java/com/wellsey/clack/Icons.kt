@@ -71,4 +71,20 @@ object Icons {
         c.drawLine(cx, cy, cx, cy - s * 0.28f, p)
         c.drawLine(cx, cy, cx + s * 0.2f, cy + s * 0.12f, p)
     }
+
+    fun search(c: Canvas, p: Paint, cx: Float, cy: Float, s: Float) {
+        p.style = Paint.Style.STROKE
+        val r = s * 0.3f
+        val ox = cx - s * 0.1f
+        val oy = cy - s * 0.1f
+        c.drawCircle(ox, oy, r, p)
+        c.drawLine(ox + r * 0.72f, oy + r * 0.72f, cx + s * 0.42f, cy + s * 0.42f, p)
+    }
+
+    fun back(c: Canvas, p: Paint, cx: Float, cy: Float, s: Float) {
+        p.style = Paint.Style.STROKE
+        c.drawLine(cx - s * 0.4f, cy, cx + s * 0.4f, cy, p)
+        c.drawLine(cx - s * 0.4f, cy, cx - s * 0.1f, cy - s * 0.3f, p)
+        c.drawLine(cx - s * 0.4f, cy, cx - s * 0.1f, cy + s * 0.3f, p)
+    }
 }
