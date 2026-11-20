@@ -24,6 +24,11 @@ class Dictionary(context: Context) {
     @Volatile private var loaded = false
     /** "isnt" → "isn't", "im" → "i'm", "ill" → "i'll" … */
     @Volatile private var contractionOf: Map<String, String> = emptyMap()
+    /** Words grouped by first letter, for the two-mistake search. */
+    @Volatile private var byInitial: Map<Char, Array<String>> = emptyMap()
+
+    private var autoKey: String? = null
+    private var autoValue: String? = null
 
     /** Words you undid an auto-correction for: never auto-correct these again. */
     private val rejected = HashSet<String>()
@@ -53,6 +58,7 @@ class Dictionary(context: Context) {
                 val c = HashMap<String, String>()
                 for (w in list) if ('\'' in w) c.putIfAbsent(w.replace("'", ""), w)
                 contractionOf = c
+                byInitial = list.groupBy { it[0] }.mapValues { it.value.toTypedArray() }
                 rank = r
                 words = sorted
                 loaded = true
@@ -62,6 +68,7 @@ class Dictionary(context: Context) {
     }
 
     /** True if the word is in the dictionary or you've used it at least twice. */
+    @Synchronized
     fun isKnown(word: String): Boolean {
         if (!loaded) return true // don't flag everything while still loading
         val w = word.lowercase()
@@ -73,8 +80,10 @@ class Dictionary(context: Context) {
     /** True for "isnt", "dont", "im": a contraction typed without its apostrophe. */
     private fun isMissingApostrophe(w: String) = !rank.containsKey(w) && contractionOf.containsKey(w)
 
+    @Synchronized
     fun isLearned(word: String) = learned.containsKey(word.lowercase())
 
+    @Synchronized
     fun learn(word: String) {
         if (word.length < 2 || word.length > 32) return
         if (!word.all { it.isLetter() || it == '\'' }) return
@@ -83,14 +92,17 @@ class Dictionary(context: Context) {
         learned[w] = (learned[w] ?: 0) + 1
         dirty = true
         cacheKey = null
+        autoKey = null
     }
 
     /** Removes a word you've taught it. Built-in words can't be removed. */
+    @Synchronized
     fun forget(word: String): Boolean {
         val removed = learned.remove(word.lowercase()) != null
         if (removed) {
             dirty = true
             cacheKey = null
+            autoKey = null
             save()
         }
         return removed
@@ -100,6 +112,7 @@ class Dictionary(context: Context) {
      * Best words for what's been typed so far: completions ("hel" → "hello")
      * and, if it doesn't look like a real word, spelling fixes ("teh" → "the").
      */
+    @Synchronized
     fun suggest(typed: String, limit: Int): List<String> {
         val key = "$typed|$limit|$loaded"
         if (key == cacheKey) return cacheValue
@@ -124,15 +137,7 @@ class Dictionary(context: Context) {
                     if (s > (scores[cand] ?: 0.0)) scores[cand] = s
                 }
                 // Two mistakes in one word: only worth the work for longer words.
-                if (!found && scores.isEmpty() && t.length in 4..12) {
-                    for ((e1, w1) in edits(t)) {
-                        for ((e2, w2) in edits(e1)) {
-                            if (e2 == t || !isCandidate(e2)) continue
-                            val s = freqScore(e2) * w1 * w2 * 0.3
-                            if (s > (scores[e2] ?: 0.0)) scores[e2] = s
-                        }
-                    }
-                }
+                if (!found && scores.isEmpty() && t.length in 4..12) addTwoEditFixes(t, scores)
             }
         }
         scores.remove(t)
@@ -149,7 +154,17 @@ class Dictionary(context: Context) {
      * The fix to apply automatically when you press space, or null if the word
      * looks fine or no fix is clearly better than the alternatives.
      */
+    @Synchronized
     fun autocorrection(typed: String): String? {
+        val key = "$typed|$loaded"
+        if (key == autoKey) return autoValue
+        val result = findAutocorrection(typed)
+        autoKey = key
+        autoValue = result
+        return result
+    }
+
+    private fun findAutocorrection(typed: String): String? {
         if (!loaded || typed.length < 2 || typed.length > 20) return null
         if (!typed.all { it.isLetter() || it == '\'' }) return null
         if (typed.length > 1 && typed.all { !it.isLetter() || it.isUpperCase() }) return null // ACRONYMS
@@ -163,15 +178,7 @@ class Dictionary(context: Context) {
             val sc = freqScore(cand) * weight
             if (sc > (scores[cand] ?: 0.0)) scores[cand] = sc
         }
-        if (scores.isEmpty() && t.length in 5..12) {
-            for ((e1, w1) in edits(t)) {
-                for ((e2, w2) in edits(e1)) {
-                    if (e2 == t || !isCandidate(e2)) continue
-                    val sc = freqScore(e2) * w1 * w2 * 0.3
-                    if (sc > (scores[e2] ?: 0.0)) scores[e2] = sc
-                }
-            }
-        }
+        if (scores.isEmpty() && t.length in 5..12) addTwoEditFixes(t, scores)
         val ranked = scores.entries.sortedByDescending { it.value }
         val best = ranked.firstOrNull() ?: return null
         val second = ranked.getOrNull(1)?.value ?: 0.0
@@ -181,10 +188,57 @@ class Dictionary(context: Context) {
     }
 
     /** You undid an auto-correction: leave this word alone from now on. */
+    @Synchronized
     fun reject(word: String) {
+        autoKey = null
         rejected.add(word.lowercase())
         learn(word)
         learn(word) // counts as known straight away
+    }
+
+    /**
+     * Words two mistakes away ("recieeve" → "receive"). Rather than trying every
+     * possible double typo (hundreds of thousands of strings, which caused lag),
+     * compare against words with the same first letter and a similar length.
+     */
+    private fun addTwoEditFixes(t: String, scores: HashMap<String, Double>) {
+        val bucket = byInitial[t[0]] ?: return
+        fun consider(w: String) {
+            if (Math.abs(w.length - t.length) > 2 || w == t) return
+            if (distance(t, w, 2) <= 2) {
+                val sc = freqScore(w) * 0.15
+                if (sc > (scores[w] ?: 0.0)) scores[w] = sc
+            }
+        }
+        for (w in bucket) consider(w)
+        for (w in learned.keys) if (w[0] == t[0] && !isMissingApostrophe(w)) consider(w)
+    }
+
+    /** Edit distance counting swapped neighbours as one mistake; stops early past [max]. */
+    private fun distance(a: String, b: String, max: Int): Int {
+        val m = b.length
+        var prev2 = IntArray(m + 1)
+        var prev = IntArray(m + 1) { it }
+        var cur = IntArray(m + 1)
+        for (i in 1..a.length) {
+            cur[0] = i
+            var rowMin = i
+            for (j in 1..m) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                var v = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) {
+                    v = minOf(v, prev2[j - 2] + 1)
+                }
+                cur[j] = v
+                if (v < rowMin) rowMin = v
+            }
+            if (rowMin > max) return max + 1
+            val tmp = prev2
+            prev2 = prev
+            prev = cur
+            cur = tmp
+        }
+        return prev[m]
     }
 
     private fun isCandidate(w: String) =
@@ -259,6 +313,7 @@ class Dictionary(context: Context) {
         return out
     }
 
+    @Synchronized
     fun save() {
         if (!dirty) return
         try {

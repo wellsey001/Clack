@@ -53,6 +53,16 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val refreshStrip = Runnable { updateStrip() }
 
+    // Slow work happens off the typing thread so keys never wait for it.
+    private val dictThread = android.os.HandlerThread("clack-dictionary").apply { start() }
+    private val dictHandler = android.os.Handler(dictThread.looper)
+    private val feedbackThread = android.os.HandlerThread("clack-feedback").apply { start() }
+    private val feedbackHandler = android.os.Handler(feedbackThread.looper)
+    private var stripRequest = 0
+
+    /** After typing a letter we know shift should be off, so skip asking the app. */
+    private var skipCapsCheck = false
+
     private var selStart = -1
     private var selEnd = -1
 
@@ -79,6 +89,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     override fun onDestroy() {
         uiHandler.removeCallbacksAndMessages(null)
+        dictThread.quitSafely()
+        feedbackThread.quitSafely()
         prefs.sp.unregisterOnSharedPreferenceChangeListener(prefListener)
         dictionary.save()
         super.onDestroy()
@@ -129,7 +141,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        dictionary.save()
+        dictHandler.post { dictionary.save() }
     }
 
     override fun onUpdateSelection(
@@ -141,7 +153,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         selStart = newSelStart
         selEnd = newSelEnd
         if (swipeBefore != null) return // we're selecting words with the delete swipe
-        updateAutoShift()
+        if (skipCapsCheck) skipCapsCheck = false else updateAutoShift()
         render()
     }
 
@@ -238,28 +250,36 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 panel.visibility = View.GONE
             }
         }
-        updateStrip()
+        // Wait until typing pauses briefly, then update the bar once (not on every key event).
         uiHandler.removeCallbacks(refreshStrip)
-        uiHandler.postDelayed(refreshStrip, 80)
+        uiHandler.postDelayed(refreshStrip, STRIP_DELAY_MS)
     }
 
     private fun updateStrip() {
         val s = strip ?: return
         val ic = currentInputConnection
         val word = if (ic != null && suggestionsAllowed && mode != Mode.EMOJI) currentWord(ic) else ""
+        val request = ++stripRequest
         if (word.isEmpty()) {
             s.suggestions = null
             return
         }
-        // (Re-checked shortly after each key in case the app was slow to update.)
-        val best = dictionary.suggest(word, 2)
-        if (dictionary.isKnown(word)) {
-            s.quoteLeft = false
-            s.suggestions = listOf(best.getOrNull(0), word, best.getOrNull(1))
-        } else {
-            // Looks misspelt: keep what you typed on the left, the best fix in the middle.
-            s.quoteLeft = true
-            s.suggestions = listOf(word, best.getOrNull(0), best.getOrNull(1))
+        val warmAutoCorrect = prefs.autoCorrect && autoCorrectAllowed
+        dictHandler.post {
+            val best = dictionary.suggest(word, 2)
+            val known = dictionary.isKnown(word)
+            if (warmAutoCorrect) dictionary.autocorrection(word) // ready for when space is pressed
+            uiHandler.post {
+                if (request != stripRequest) return@post // you've typed more since
+                if (known) {
+                    s.quoteLeft = false
+                    s.suggestions = listOf(best.getOrNull(0), word, best.getOrNull(1))
+                } else {
+                    // Looks misspelt: keep what you typed on the left, the best fix in the middle.
+                    s.quoteLeft = true
+                    s.suggestions = listOf(word, best.getOrNull(0), best.getOrNull(1))
+                }
+            }
         }
     }
 
@@ -278,9 +298,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private fun isApostrophe(c: Char) = c == '\'' || c == '’'
 
     /** (typed word, fix) if the word before the cursor should be auto-corrected. */
-    private fun autoCorrection(ic: InputConnection): Pair<String, String>? {
+    private fun autoCorrection(word: String): Pair<String, String>? {
         if (!prefs.autoCorrect || !autoCorrectAllowed) return null
-        val word = currentWord(ic)
         if (word.isEmpty()) return null
         val fix = dictionary.autocorrection(word) ?: return null
         return word to fix
@@ -293,24 +312,26 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         ic.endBatchEdit()
     }
 
-    private fun learnCurrentWord(ic: InputConnection) {
-        if (!learningAllowed) return
-        val w = currentWord(ic)
-        if (w.length >= 2) dictionary.learn(w)
+    private fun learnWord(w: String) {
+        if (learningAllowed && w.length >= 2) dictionary.learn(w)
     }
 
     // ---- key handling -----------------------------------------------------
 
     override fun onKeyDown(key: Key) {
-        if (prefs.vibrate) vibrate()
-        if (prefs.sound) {
-            val fx = when (key.code) {
-                Key.DELETE -> AudioManager.FX_KEYPRESS_DELETE
-                Key.SPACE -> AudioManager.FX_KEYPRESS_SPACEBAR
-                Key.ENTER -> AudioManager.FX_KEYPRESS_RETURN
-                else -> AudioManager.FX_KEYPRESS_STANDARD
-            }
-            audio?.playSoundEffect(fx, -1f)
+        val doVibrate = prefs.vibrate
+        val doSound = prefs.sound
+        if (!doVibrate && !doSound) return
+        val fx = when (key.code) {
+            Key.DELETE -> AudioManager.FX_KEYPRESS_DELETE
+            Key.SPACE -> AudioManager.FX_KEYPRESS_SPACEBAR
+            Key.ENTER -> AudioManager.FX_KEYPRESS_RETURN
+            else -> AudioManager.FX_KEYPRESS_STANDARD
+        }
+        // Talking to the vibration and sound services can be slow; never make typing wait.
+        feedbackHandler.post {
+            if (doVibrate) vibrate()
+            if (doSound) audio?.playSoundEffect(fx, -1f)
         }
     }
 
@@ -331,6 +352,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         autoSpaced = false
         val pendingUndo = undo
         undo = null
+        skipCapsCheck = false
         when (key.code) {
             Key.DELETE -> {
                 val tail = pendingUndo?.tail
@@ -351,26 +373,29 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 updateAutoShift()
             }
             Key.ENTER -> {
-                val fix = autoCorrection(ic)
+                val word = if (suggestionsAllowed) currentWord(ic) else ""
+                val fix = autoCorrection(word)
                 if (fix != null) replaceBeforeCursor(ic, fix.first.length, fix.second)
-                else learnCurrentWord(ic)
+                else learnWord(word)
                 handleEnter(ic)
             }
             Key.SPACE -> {
-                val fix = autoCorrection(ic)
+                val word = if (suggestionsAllowed) currentWord(ic) else ""
+                val fix = autoCorrection(word)
                 if (fix != null) {
                     replaceBeforeCursor(ic, fix.first.length, fix.second + " ")
                     undo = Undo(fix.first, fix.second + " ")
                     lastSpaceTap = SystemClock.uptimeMillis()
                 } else {
-                    learnCurrentWord(ic)
+                    learnWord(word)
                     handleSpace(ic)
                 }
             }
             else -> {
                 val punct = key.text.length == 1 && key.text[0] in PUNCTUATION
-                val fix = if (punct) autoCorrection(ic) else null
-                if (punct && fix == null) learnCurrentWord(ic)
+                val word = if (punct && suggestionsAllowed) currentWord(ic) else ""
+                val fix = if (punct) autoCorrection(word) else null
+                if (punct && fix == null) learnWord(word)
                 if (fix != null) {
                     replaceBeforeCursor(ic, fix.first.length, fix.second + key.text)
                     undo = Undo(fix.first, fix.second + key.text)
@@ -387,6 +412,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                     }
                 } else {
                     commitText(ic, key.text)
+                    // A letter or number never starts a sentence, so no need to re-check capitals.
+                    if (key.text.length == 1 && key.text[0].isLetterOrDigit()) skipCapsCheck = true
                 }
             }
         }
@@ -591,5 +618,6 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         private const val DOUBLE_TAP_MS = 350L
         private const val DOUBLE_SPACE_MS = 450L
         private const val PUNCTUATION = ".,!?;:"
+        private const val STRIP_DELAY_MS = 30L
     }
 }
