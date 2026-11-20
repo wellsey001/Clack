@@ -60,12 +60,20 @@ object OtpDetector {
  */
 object OtpStore {
     private const val LIFETIME_MS = 5 * 60 * 1000L
+    private const val USED_MEMORY_MS = 15 * 60 * 1000L
 
     @Volatile private var code: String? = null
     @Volatile private var receivedAt = 0L
+
+    /** Codes already pasted or dismissed, so a re-posted notification doesn't bring them back. */
+    private val used = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private val listeners = CopyOnWriteArrayList<Runnable>()
 
     fun offer(newCode: String) {
+        val now = SystemClock.elapsedRealtime()
+        used.entries.removeIf { now - it.value > USED_MEMORY_MS }
+        if (used.containsKey(newCode)) return
+        if (newCode == code) return // same code again (notification updated): nothing new
         code = newCode
         receivedAt = SystemClock.elapsedRealtime()
         listeners.forEach { it.run() }
@@ -84,7 +92,8 @@ object OtpStore {
     fun remainingMs(): Long =
         if (code == null) 0 else (LIFETIME_MS - (SystemClock.elapsedRealtime() - receivedAt)).coerceAtLeast(0)
 
-    fun clear() {
+    fun clear(used: Boolean = false) {
+        if (used) code?.let { this.used[it] = SystemClock.elapsedRealtime() }
         code = null
         listeners.forEach { it.run() }
     }

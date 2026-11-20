@@ -136,5 +136,6 @@ gradle assembleDebug
 
 - Word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit Dave (code MIT; word data CC BY-SA 4.0), filtered to the 50,000 most common English words.
 - Emoji list: [unicode-emoji-json](https://github.com/muan/unicode-emoji-json) by Mu-An Chiou (MIT).
+- Common misspellings were filtered out of the word list at build time using [codespell](https://github.com/codespell-project/codespell)'s list (not included in the app).
 - Emoji search keywords: [emojilib](https://github.com/muan/emojilib) by Mu-An Chiou (MIT).
 - Inspired by Gboard. Clack isn't affiliated with or endorsed by Google.

@@ -156,6 +156,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         configureForField(info)
         lastSpaceTap = 0
         autoSpaced = false
+        undo = null
+        swipeBefore = null
+        swipeAnchor = -1
+        swipeWords = 0
         updateAutoShift()
         keyboard?.enterLabel = enterLabelFor(info)
         render()
@@ -382,8 +386,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
      * (typed word, fix) if the word before the cursor should change when you press
      * space: a spelling fix ("teh" → "the") and/or a capital ("i" → "I", "monday" → "Monday").
      */
-    private fun autoFix(word: String): Pair<String, String>? {
+    private fun autoFix(word: String, ic: InputConnection? = null): Pair<String, String>? {
         if (word.isEmpty() || !autoCorrectAllowed) return null
+        // Cursor in the middle of a word (e.g. splitting "hel|lo"): leave it alone.
+        if (ic != null && lettersAfterCursor(ic) > 0) return null
         val corrected = if (prefs.autoCorrect) dictionary.autocorrection(word) else null
         val base = corrected ?: word
         val capped = if (prefs.autoCapWords) dictionary.capitalisation(base) else null
@@ -395,9 +401,18 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private fun learnContext(ctx: Ctx?, finalWord: String, typedAsIs: Boolean) {
         if (!learningAllowed || ctx == null || finalWord.isEmpty()) return
         dictionary.learnPair(ctx.prev2, ctx.prev, finalWord)
-        if (typedAsIs && ctx.prev != StarterPredictions.START && finalWord[0].isUpperCase()) {
-            dictionary.learnCapitalised(finalWord)
+        if (typedAsIs && ctx.prev != StarterPredictions.START) {
+            if (finalWord[0].isUpperCase()) dictionary.learnCapitalised(finalWord)
+            else dictionary.learnLowercase(finalWord)
         }
+    }
+
+    /** How many letters of the current word come after the cursor. */
+    private fun lettersAfterCursor(ic: InputConnection): Int {
+        val after = ic.getTextAfterCursor(32, 0) ?: return 0
+        var n = 0
+        while (n < after.length && (after[n].isLetter() || isApostrophe(after[n]))) n++
+        return n
     }
 
     private fun replaceBeforeCursor(ic: InputConnection, length: Int, text: String) {
@@ -474,16 +489,28 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             Key.ENTER -> {
                 val ctx = if (suggestionsAllowed) readContext(ic) else null
                 val word = ctx?.word ?: ""
-                val fix = autoFix(word)
+                val fix = autoFix(word, ic)
                 if (fix != null) replaceBeforeCursor(ic, fix.first.length, fix.second)
                 else learnWord(word)
                 learnContext(ctx, fix?.second ?: word, typedAsIs = fix == null)
                 handleEnter(ic)
             }
             Key.SPACE -> {
+                if (wasAutoSpaced && ic.getTextBeforeCursor(1, 0)?.toString() == " ") {
+                    // The suggestion already added a space: a second tap means "end the
+                    // sentence" (like double-space), never two spaces.
+                    if (prefs.doubleSpacePeriod) {
+                        val before = ic.getTextBeforeCursor(2, 0)
+                        if (before != null && before.length == 2 && before[0].isLetterOrDigit()) {
+                            replaceBeforeCursor(ic, 1, ". ")
+                        }
+                    }
+                    render()
+                    return
+                }
                 val ctx = if (suggestionsAllowed) readContext(ic) else null
                 val word = ctx?.word ?: ""
-                val fix = autoFix(word)
+                val fix = autoFix(word, ic)
                 if (fix != null) {
                     replaceBeforeCursor(ic, fix.first.length, fix.second + " ")
                     undo = Undo(fix.first, fix.second + " ")
@@ -498,7 +525,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 val punct = key.text.length == 1 && key.text[0] in PUNCTUATION
                 val ctx = if (punct && suggestionsAllowed) readContext(ic) else null
                 val word = ctx?.word ?: ""
-                val fix = if (punct) autoFix(word) else null
+                val fix = if (punct) autoFix(word, ic) else null
                 if (punct && fix == null) learnWord(word)
                 if (punct) learnContext(ctx, fix?.second ?: word, typedAsIs = fix == null)
                 if (fix != null) {
@@ -590,8 +617,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val ic = currentInputConnection ?: return
         val ctx = readContext(ic)
         val typed = ctx?.word ?: ""
+        // If the cursor is inside a word ("hel|lo"), replace the whole word, not just the start.
+        val after = if (typed.isNotEmpty()) lettersAfterCursor(ic) else 0
         ic.beginBatchEdit()
-        if (typed.isNotEmpty()) ic.deleteSurroundingText(typed.length, 0)
+        if (typed.isNotEmpty() || after > 0) ic.deleteSurroundingText(typed.length, after)
         ic.commitText("$word ", 1)
         ic.endBatchEdit()
         if (learningAllowed) {
@@ -633,9 +662,9 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             SuggestionStripView.ACTION_HIDE -> requestHideSelf(0)
             SuggestionStripView.ACTION_PASTE_CODE -> {
                 OtpStore.current()?.let { currentInputConnection?.commitText(it, 1) }
-                OtpStore.clear()
+                OtpStore.clear(used = true)
             }
-            SuggestionStripView.ACTION_DISMISS_CODE -> OtpStore.clear()
+            SuggestionStripView.ACTION_DISMISS_CODE -> OtpStore.clear(used = true)
         }
     }
 

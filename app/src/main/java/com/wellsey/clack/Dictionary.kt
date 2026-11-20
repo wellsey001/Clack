@@ -143,6 +143,7 @@ class Dictionary(context: Context) {
         val scores = HashMap<String, Double>()
         if (t.isNotEmpty()) {
             addCompletions(t, scores)
+            SPLIT_FIXES[t]?.let { scores[it] = 1e6 }
             // Always offer the apostrophe version: "isnt" → "isn't", "ill" → "I'll".
             contractionOf[t.replace("'", "")]?.let { c ->
                 if (c != t) {
@@ -193,8 +194,12 @@ class Dictionary(context: Context) {
         if (!loaded || typed.length < 2 || typed.length > 20) return null
         if (!typed.all { it.isLetter() || it == '\'' }) return null
         if (typed.length > 1 && typed.all { !it.isLetter() || it.isUpperCase() }) return null // ACRONYMS
+        if (typed.drop(1).any { it.isUpperCase() }) return null // iPhone, ColorOS, McDonald
         val t = typed.lowercase()
-        if (isKnown(t) || t in rejected) return null
+        if (t in rejected) return null
+        // Words that should be two: "alot" → "a lot", "aswell" → "as well".
+        SPLIT_FIXES[t]?.let { return matchCase(it, typed) }
+        if (isKnown(t)) return null
         // A contraction missing its apostrophe is always fixed: "isnt" → "isn't", "im" → "I'm".
         if (isMissingApostrophe(t)) contractionOf[t]?.let { return matchCase(it, typed) }
         val scores = HashMap<String, Double>()
@@ -203,12 +208,15 @@ class Dictionary(context: Context) {
             val sc = freqScore(cand) * weight
             if (sc > (scores[cand] ?: 0.0)) scores[cand] = sc
         }
-        if (scores.isEmpty() && t.length in 5..12) addTwoEditFixes(t, scores)
+        // Two mistakes in one word: only for longer words, and only when very sure.
+        val twoEdits = scores.isEmpty() && t.length in 6..12
+        if (twoEdits) addTwoEditFixes(t, scores)
         val ranked = scores.entries.sortedByDescending { it.value }
         val best = ranked.firstOrNull() ?: return null
         val second = ranked.getOrNull(1)?.value ?: 0.0
-        val margin = if (t.length <= 3) 3.0 else 2.0
-        if (best.value < MIN_AUTOCORRECT_SCORE || best.value < second * margin) return null
+        val margin = if (t.length <= 3) 2.5 else 2.0
+        val needed = if (twoEdits) MIN_TWO_EDIT_SCORE else MIN_AUTOCORRECT_SCORE
+        if (best.value < needed || best.value < second * margin) return null
         return matchCase(best.key, typed)
     }
 
@@ -217,6 +225,8 @@ class Dictionary(context: Context) {
     fun reject(word: String) {
         autoKey = null
         rejected.add(word.lowercase())
+        caps.remove(word.lowercase()) // undoing a capital also forgets it
+        dirty = true
         learn(word)
         learn(word) // counts as known straight away
     }
@@ -316,7 +326,7 @@ class Dictionary(context: Context) {
             if (i < n - 1) {
                 val chars = w.toCharArray()
                 val tmp = chars[i]; chars[i] = chars[i + 1]; chars[i + 1] = tmp
-                put(String(chars), 1.0)
+                put(String(chars), 1.5) // swapped letters are the most common typing slip
             }
             // replacement (hit the wrong key)
             for (c in LETTERS) {
@@ -329,7 +339,7 @@ class Dictionary(context: Context) {
             for (c in INSERTABLE) {
                 val weight = when {
                     c == '\'' -> 2.5
-                    (i > 0 && w[i - 1] == c) || (i < n && w[i] == c) -> 0.9
+                    (i > 0 && w[i - 1] == c) || (i < n && w[i] == c) -> 1.4 // missed a double letter
                     else -> 0.6
                 }
                 put(w.substring(0, i) + c + w.substring(i), weight)
@@ -393,8 +403,21 @@ class Dictionary(context: Context) {
         if (!word.all { it.isLetter() || it == '\'' || it == '-' }) return
         val lower = word.lowercase()
         if (lower == "i" || lower.startsWith("i'")) return
+        // Very common words ("Hello", "Yes") are capitalised for other reasons (quotes,
+        // headings), not because they're names: don't learn those.
+        val r = rank[lower]
+        if (r != null && r < COMMON_WORD_RANK) return
         val old = caps[lower]
         caps[lower] = word to ((if (old?.first == word) old.second else 0) + 1)
+        dirty = true
+    }
+
+    /** You wrote [word] in lowercase mid-sentence: count that against any learned capital. */
+    @Synchronized
+    fun learnLowercase(word: String) {
+        val lower = word.lowercase()
+        val old = caps[lower] ?: return
+        if (old.second <= 1) caps.remove(lower) else caps[lower] = old.first to old.second - 1
         dirty = true
     }
 
@@ -430,6 +453,15 @@ class Dictionary(context: Context) {
     companion object {
         private const val MAX_LEARNED = 5000
         private const val MAX_PAIRS = 20000
+        private const val COMMON_WORD_RANK = 300
+
+        /** Common run-together words and their two-word fixes. */
+        private val SPLIT_FIXES = mapOf(
+            "alot" to "a lot", "aswell" to "as well", "infact" to "in fact", "ofcourse" to "of course",
+            "eachother" to "each other", "thankyou" to "thank you", "atleast" to "at least",
+            "incase" to "in case", "inbetween" to "in between", "alright" to "alright",
+            "nevermind" to "never mind", "everytime" to "every time", "abit" to "a bit",
+        ).filter { it.key != it.value }
 
         /** Always capitalised. ("may" and "march" are left out: they're ordinary words too.) */
         private val ALWAYS_CAPS: Map<String, String> = HashMap<String, String>().apply {
@@ -442,7 +474,8 @@ class Dictionary(context: Context) {
             put("tv", "TV")
         }
         const val LEARN_THRESHOLD = 2
-        private const val MIN_AUTOCORRECT_SCORE = 30.0
+        private const val MIN_AUTOCORRECT_SCORE = 90.0
+        private const val MIN_TWO_EDIT_SCORE = 150.0
         private const val LETTERS = "abcdefghijklmnopqrstuvwxyz"
         private const val INSERTABLE = "abcdefghijklmnopqrstuvwxyz'"
 
