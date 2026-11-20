@@ -40,10 +40,10 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
 
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        textSize = dp(13.5f)
+        textSize = dp(17f)
     }
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        strokeWidth = dp(1.5f)
+        strokeWidth = dp(1.8f)
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
@@ -62,7 +62,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
     private val toolbar = intArrayOf(ACTION_EMOJI, ACTION_CLIPBOARD, ACTION_SETTINGS, ACTION_SWITCH, ACTION_HIDE)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), dp(24f).toInt())
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), dp(46f).toInt())
     }
 
     private fun slotCount() = if (suggestions != null) 3 else toolbar.size
@@ -73,7 +73,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         val cell = width / n.toFloat()
         if (pressedIndex in 0 until n) {
             fill.color = palette.keyPressed
-            rect.set(pressedIndex * cell + dp(4f), dp(1.5f), (pressedIndex + 1) * cell - dp(4f), height - dp(1.5f))
+            rect.set(pressedIndex * cell + dp(4f), dp(5f), (pressedIndex + 1) * cell - dp(4f), height - dp(5f))
             canvas.drawRoundRect(rect, height / 2f, height / 2f, fill)
         }
         val s = suggestions
@@ -93,7 +93,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
             }
         } else {
             iconPaint.color = palette.icon
-            val size = dp(15f)
+            val size = dp(21f)
             for (i in toolbar.indices) {
                 val cx = i * cell + cell / 2
                 val cy = height / 2f
