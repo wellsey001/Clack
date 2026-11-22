@@ -73,6 +73,8 @@ class SetupActivity : Activity() {
         root.addView(toggle("Double-tap space for full stop", prefs.doubleSpacePeriod) { prefs.doubleSpacePeriod = it })
         root.addView(toggle("Number hints on top row (when number row is off)", prefs.popupHints) { prefs.popupHints = it })
         root.addView(toggle("Pop-up preview on key press", prefs.keyPreview) { prefs.keyPreview = it })
+        root.addView(toggle("Glide typing (swipe across letters)", prefs.glide) { prefs.glide = it })
+        root.addView(toggle("Show the glide trail", prefs.glideTrail) { prefs.glideTrail = it })
 
         root.addView(body("Learn a new word after using it"))
         root.addView(radio(

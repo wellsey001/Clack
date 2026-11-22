@@ -24,6 +24,7 @@
 | | |
 |---|---|
 | ⌨️ **Feels like Gboard** | Material You colours, flat keys, a pill-shaped enter key and light/dark themes that follow your system. |
+| 〰️ **Glide typing** | Swipe across the letters to type a word, with a trail that follows your finger. Words glide together with spaces added, two runner-up words wait in the bar, and delete removes the whole glided word. |
 | 🫧 **Glass theme** | A frosted, translucent keyboard that blurs the app behind it (Android 12+), matching the Perch launcher. |
 | ✋ **Make it yours** | Key borders, letter size, key spacing and a one-handed mode (left or right). |
 | 🔤 **Spell check** | Misspelt words get a fix in the middle of the suggestion bar: *teh → the*, *recieve → receive*, *dont → don't*. |
@@ -135,8 +136,6 @@ gradle assembleDebug
 
 ## 🗺️ Ideas for later
 
-- [ ] Glide typing (swipe across letters)
-- [ ] Clipboard history
 - [ ] Voice typing
 - [ ] More languages
 

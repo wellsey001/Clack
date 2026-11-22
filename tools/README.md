@@ -15,7 +15,8 @@ python3 build_emoji_search.py unicode-emoji-json/data-by-group.json emojilib/dis
         ../app/src/main/assets/emoji_search.txt
 python3 dict_test.py ../app/src/main/assets/words.txt    # typo / false-correction checks
 python3 segment_test.py ../app/src/main/assets/words.txt # run-together sentence checks
+python3 glide_test.py ../app/src/main/assets/words.txt   # simulated glide-typing accuracy
 python3 banner.py ../docs/banner.svg
 ```
 
-`dict_test.py` and `segment_test.py` mirror the scoring in `Dictionary.kt`. Keep the two in step when tuning auto-correct.
+`dict_test.py` and `segment_test.py` mirror the scoring in `Dictionary.kt`, and `glide_test.py` mirrors `GlideDecoder.kt`. Keep the two in step when tuning auto-correct.

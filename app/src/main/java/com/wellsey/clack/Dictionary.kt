@@ -602,6 +602,32 @@ class Dictionary private constructor(context: Context) {
         }
     }
 
+    // ---- glide typing -----------------------------------------------------------
+
+    /**
+     * The likeliest words for a swipe (positions in key widths), best first.
+     * [prev2]/[prev] are the words before it, so "see you" + swipe favours "soon".
+     */
+    @Synchronized
+    fun glide(
+        xs: FloatArray,
+        ys: FloatArray,
+        centers: Map<Char, FloatArray>,
+        prev2: String?,
+        prev: String?,
+    ): List<String> {
+        if (!loaded) return emptyList()
+        val learnedByInitial = learned.keys.filter { !rank.containsKey(it) && isLearnedWord(it) }.groupBy { it[0] }
+        return GlideDecoder.decode(
+            xs, ys, centers,
+            candidatesFor = { first ->
+                (byInitial[first]?.asList() ?: emptyList()) + (learnedByInitial[first] ?: emptyList())
+            },
+            logPrior = { w -> Math.log(freqScore(w)) },
+            contextBonus = { w -> if (prev != null) pairBonus(prev2, prev, w) else 1.0 },
+        )
+    }
+
     // ---- My words screen -------------------------------------------------------
 
     /**

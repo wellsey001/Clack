@@ -52,6 +52,15 @@ class Prefs(context: Context) {
         get() = bool("auto_cap_words", true)
         set(v) = setBool("auto_cap_words", v)
 
+    /** Swipe across the letters to type a word. */
+    var glide: Boolean
+        get() = bool("glide", true)
+        set(v) = setBool("glide", v)
+
+    var glideTrail: Boolean
+        get() = bool("glide_trail", true)
+        set(v) = setBool("glide_trail", v)
+
     var keyPreview: Boolean
         get() = bool("key_preview", true)
         set(v) = setBool("key_preview", v)

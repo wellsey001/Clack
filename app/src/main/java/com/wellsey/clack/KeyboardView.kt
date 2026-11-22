@@ -34,6 +34,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         fun onDeleteSwipeEnd(commit: Boolean)
         /** One-handed mode side buttons: [ONE_HANDED_SWAP] or [ONE_HANDED_EXIT]. */
         fun onOneHandedAction(action: Int)
+        /** A glide across the letters finished. Points are in view pixels. */
+        fun onGlide(xs: FloatArray, ys: FloatArray)
     }
 
     private val density = resources.displayMetrics.density
@@ -74,6 +76,28 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         set(value) { if (field != value) { field = value; invalidate() } }
 
     var showPreview = true
+
+    /** Swipe across letters to type a word. */
+    var glideEnabled = false
+        set(value) { field = value; if (!value && gesturing) cancelTouch() }
+
+    /** Draw the finger's path while gliding. */
+    var glideTrail = true
+
+    /** Centre of each letter key, plus the width of one key, for the glide decoder. */
+    fun glideGeometry(): Pair<Map<Char, FloatArray>, Float>? {
+        val centers = HashMap<Char, FloatArray>()
+        var unit = 0f
+        for (kr in keyRects) {
+            val t = kr.key.text
+            if (kr.key.isCharacter && t.length == 1 && t[0] in 'a'..'z') {
+                centers[t[0]] = floatArrayOf(kr.rect.centerX(), kr.rect.centerY())
+                if (unit == 0f) unit = kr.rect.width()
+            }
+        }
+        if (centers.size < 20 || unit <= 0f) return null
+        return centers to unit
+    }
     var showHints = true
 
     /** Outline every key. */
@@ -144,6 +168,22 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private var activePointer = -1
     private var pressed: KeyRect? = null
     private var downX = 0f
+    private var downY = 0f
+
+    // glide
+    private var gesturing = false
+    private var gestureStart: KeyRect? = null
+    private var gxs = FloatArray(256)
+    private var gys = FloatArray(256)
+    private var gn = 0
+    private val trailPath = Path()
+    private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private var trailFading = false
+    private val clearTrail = Runnable { trailFading = false; gn = 0; invalidate() }
     private var curX = 0f
     private var lastX = 0f
     private var spaceDragging = false
@@ -223,15 +263,43 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(palette.background)
-        val p = pressed
+        val p = if (gesturing) null else pressed
         for (kr in keyRects) {
             drawKey(canvas, kr, kr === p && popupChars.isEmpty())
         }
+        if ((gesturing || trailFading) && glideTrail && gn > 1) drawTrail(canvas)
         if (p != null && popupChars.isEmpty() && showPreview && p.key.isCharacter) {
             drawPreview(canvas, p)
         }
         if (popupChars.isNotEmpty()) drawPopup(canvas)
         if (oneHanded != 0) drawSideButtons(canvas)
+    }
+
+    private fun drawTrail(c: Canvas) {
+        trailPath.reset()
+        trailPath.moveTo(gxs[0], gys[0])
+        for (i in 1 until gn) {
+            // smooth with midpoints
+            val mx = (gxs[i - 1] + gxs[i]) / 2f
+            val my = (gys[i - 1] + gys[i]) / 2f
+            trailPath.quadTo(gxs[i - 1], gys[i - 1], mx, my)
+        }
+        trailPath.lineTo(gxs[gn - 1], gys[gn - 1])
+        trailPaint.color = palette.accent
+        trailPaint.alpha = if (trailFading) 90 else 200
+        trailPaint.strokeWidth = dp(5f)
+        c.drawPath(trailPath, trailPaint)
+    }
+
+    private fun addPoint(x: Float, y: Float) {
+        if (gn > 0) {
+            val dx = x - gxs[gn - 1]; val dy = y - gys[gn - 1]
+            if (dx * dx + dy * dy < dp(2f) * dp(2f)) return
+        }
+        if (gn == gxs.size) {
+            gxs = gxs.copyOf(gn * 2); gys = gys.copyOf(gn * 2)
+        }
+        gxs[gn] = x; gys[gn] = y; gn++
     }
 
     private fun drawSideButtons(c: Canvas) {
@@ -446,12 +514,18 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                 // A second finger landed: finish the first key straight away
                 // so fast two-thumb typing never drops letters.
                 val i = e.actionIndex
+                if (gesturing) return true
                 if (pressed != null) releasePress(commit = true)
                 startPress(e.getPointerId(i), e.getX(i), e.getY(i))
             }
             MotionEvent.ACTION_MOVE -> {
                 val i = e.findPointerIndex(activePointer)
-                if (i >= 0) movePress(e.getX(i), e.getY(i))
+                if (i >= 0) {
+                    if (gesturing) {
+                        for (h in 0 until e.historySize) addPoint(e.getHistoricalX(i, h), e.getHistoricalY(i, h))
+                    }
+                    movePress(e.getX(i), e.getY(i))
+                }
             }
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP -> {
                 if (e.getPointerId(e.actionIndex) == activePointer) releasePress(commit = true)
@@ -465,7 +539,12 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val kr = keyAt(x, y) ?: return
         activePointer = id
         pressed = kr
-        downX = x; curX = x; lastX = x
+        downX = x; downY = y; curX = x; lastX = x
+        uiHandler.removeCallbacks(clearTrail)
+        trailFading = false
+        gesturing = false
+        gestureStart = kr
+        gn = 0
         spaceDragging = false
         longPressFired = false
         popupChars = emptyList()
@@ -524,6 +603,25 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                 }
             }
             Key.TEXT -> {
+                if (gesturing) {
+                    addPoint(x, y)
+                    invalidate()
+                    return
+                }
+                val start = gestureStart
+                if (glideEnabled && lettersMode && start != null && isGlideLetter(start.key)) {
+                    val dx = x - downX; val dy = y - downY
+                    val far = start.rect.width() * 0.75f
+                    if (dx * dx + dy * dy > far * far && !longPressFired) {
+                        gesturing = true
+                        uiHandler.removeCallbacks(longPressRunnable)
+                        gn = 0
+                        addPoint(downX, downY)
+                        addPoint(x, y)
+                        invalidate()
+                        return
+                    }
+                }
                 // Let the finger slide onto a neighbouring letter before lifting.
                 if (p.rect.contains(x, y)) return
                 val kr = keyAt(x, y) ?: return
@@ -541,6 +639,19 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         uiHandler.removeCallbacks(longPressRunnable)
         uiHandler.removeCallbacks(repeatRunnable)
         val p = pressed
+        if (gesturing) {
+            gesturing = false
+            if (commit && gn > 1) {
+                listener.onGlide(gxs.copyOf(gn), gys.copyOf(gn))
+                trailFading = true
+                uiHandler.postDelayed(clearTrail, 160L)
+            } else gn = 0
+            pressed = null
+            activePointer = -1
+            longPressFired = false
+            invalidate()
+            return
+        }
         if (p != null && p.key.code == Key.DELETE && deleteSwiping) {
             listener.onDeleteSwipeEnd(commit)
         } else if (p != null && commit) {
@@ -561,6 +672,9 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         longPressFired = false
         invalidate()
     }
+
+    private fun isGlideLetter(k: Key) =
+        k.isCharacter && k.text.length == 1 && k.text[0].lowercaseChar() in 'a'..'z'
 
     private fun cancelTouch() {
         if (pressed != null) releasePress(commit = false)

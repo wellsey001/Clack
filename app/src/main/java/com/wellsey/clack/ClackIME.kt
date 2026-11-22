@@ -65,6 +65,11 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     /** Last auto-correction, so pressing delete straight after can undo it. */
     private class Undo(val original: String, val tail: String)
     private var undo: Undo? = null
+
+    /** The word just typed by gliding, and the other words it might have been. */
+    private class GlideResult(val word: String, val options: List<String>)
+    private var glide: GlideResult? = null
+    private var glideRequest = 0
     /** Show the suggestion bar (everywhere except passwords). */
     private var suggestionsAllowed = true
     /** Auto-correct (not in web addresses, emails or fields that ask for no suggestions). */
@@ -182,6 +187,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         lastSpaceTap = 0
         autoSpaced = false
         undo = null
+        glide = null
         swipeBefore = null
         swipeAnchor = -1
         swipeWords = 0
@@ -272,6 +278,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         baseKeyHeightPx = baseDp * (if (landscape) 0.78f else 1f) * resources.displayMetrics.density
         kb.keyHeightPx = baseKeyHeightPx
         kb.showPreview = prefs.keyPreview
+        kb.glideTrail = prefs.glideTrail
         kb.keyBorders = prefs.keyBorders
         kb.labelScale = when (prefs.labelSize) {
             "small" -> 0.88f
@@ -362,6 +369,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             kb.keyHeightPx = if (mode == Mode.NUMPAD) baseKeyHeightPx * 1.2f else baseKeyHeightPx
         }
         kb.showHints = prefs.popupHints && !prefs.numberRow
+        kb.glideEnabled = prefs.glide && suggestionsAllowed && mode == Mode.LETTERS
         kb.rows = when (mode) {
             Mode.LETTERS -> if (prefs.numberRow) Layouts.lettersWithNumbers else Layouts.letters
             Mode.SYMBOLS -> Layouts.symbols
@@ -412,6 +420,17 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         }
         val ctx = if (ic != null && suggestionsAllowed && !panelOpen) readContext(ic) else null
         val word = ctx?.word ?: ""
+        val g = glide
+        if (g != null && !panelOpen) {
+            if (word == g.word) {
+                // Just glided: the word in the middle, the other likely words either side.
+                s.otpCode = null
+                s.quoteLeft = false
+                s.suggestions = listOf(g.options.getOrNull(0), g.word, g.options.getOrNull(1))
+                return
+            }
+            glide = null
+        }
         val code = if (prefs.otpCodes && !panelOpen) OtpStore.current() else null
         s.otpCode = code
         if (code != null) {
@@ -597,11 +616,16 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         autoSpaced = false
         val pendingUndo = undo
         undo = null
+        val lastGlide = glide
+        glide = null
         skipCapsCheck = false
         when (key.code) {
             Key.DELETE -> {
                 val tail = pendingUndo?.tail
-                if (pendingUndo != null && ic.getTextBeforeCursor(tail!!.length, 0)?.toString() == tail) {
+                if (lastGlide != null && ic.getTextBeforeCursor(lastGlide.word.length, 0)?.toString() == lastGlide.word) {
+                    // Delete straight after a glide removes the whole word, like Gboard.
+                    ic.deleteSurroundingText(lastGlide.word.length, 0)
+                } else if (pendingUndo != null && ic.getTextBeforeCursor(tail!!.length, 0)?.toString() == tail) {
                     // Undo the auto-correction and stop correcting that word.
                     replaceBeforeCursor(ic, tail.length, pendingUndo.original)
                     dictionary.reject(pendingUndo.original)
@@ -674,6 +698,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                         commitText(ic, key.text)
                     }
                 } else {
+                    // Tapping a letter right after a glided word starts a new word.
+                    if (lastGlide != null && key.text.length == 1 && key.text[0].isLetterOrDigit()) {
+                        commitText(ic, " ")
+                    }
                     commitText(ic, key.text)
                     // A letter or number never starts a sentence, so no need to re-check capitals.
                     if (key.text.length == 1 && key.text[0].isLetterOrDigit()) skipCapsCheck = true
@@ -758,6 +786,20 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             render()
             return
         }
+        val g = glide
+        if (g != null) {
+            // Swap the glided word for one of the alternatives (no extra space).
+            if (word != g.word &&
+                ic.getTextBeforeCursor(g.word.length, 0)?.toString() == g.word
+            ) {
+                replaceBeforeCursor(ic, g.word.length, word)
+                glide = GlideResult(word, g.options.map { if (it == word) g.word else it })
+                if (learningAllowed) dictionary.learn(word)
+            }
+            skipCapsCheck = true
+            render()
+            return
+        }
         val ctx = readContext(ic)
         val typed = ctx?.word ?: ""
         // If the cursor is inside a word ("hel|lo"), replace the whole word, not just the start.
@@ -773,6 +815,59 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         if (shift == ShiftState.ON) shift = ShiftState.OFF
         autoSpaced = true
         lastSpaceTap = 0
+        render()
+    }
+
+    // ---- glide typing -------------------------------------------------------
+
+    override fun onGlide(xs: FloatArray, ys: FloatArray) {
+        if (mode != Mode.LETTERS) return
+        val kb = keyboard ?: return
+        val ic = currentInputConnection ?: return
+        val (centers, unit) = kb.glideGeometry() ?: return
+        // Work in keys (one key across, one row down) so screen size doesn't matter.
+        val rowH = kb.keyHeightPx
+        val nx = FloatArray(xs.size) { xs[it] / unit }
+        val ny = FloatArray(ys.size) { ys[it] / rowH }
+        val nc = centers.mapValues { (_, c) -> floatArrayOf(c[0] / unit, c[1] / rowH) }
+        val ctx = readContext(ic)
+        // Gliding straight after a typed word: that word becomes the one before.
+        val afterWord = ctx != null && ctx.word.isNotEmpty()
+        val prev2 = if (afterWord) ctx?.prev else ctx?.prev2
+        val prev = if (afterWord) ctx?.word else ctx?.prev
+        val shiftNow = shift
+        val request = ++glideRequest
+        dictHandler.post {
+            val words = dictionary.glide(nx, ny, nc, prev2, prev?.lowercase())
+            uiHandler.post {
+                if (request == glideRequest && words.isNotEmpty()) commitGlide(words, shiftNow)
+            }
+        }
+    }
+
+    private fun commitGlide(words: List<String>, shiftAtStart: ShiftState) {
+        val ic = currentInputConnection ?: return
+        if (mode != Mode.LETTERS) return
+        val styled = words.map { w ->
+            when (shiftAtStart) {
+                ShiftState.LOCKED -> w.uppercase()
+                ShiftState.ON -> w.replaceFirstChar { it.uppercase() }
+                else -> (if (prefs.autoCapWords) dictionary.capitalisation(w) else null) ?: w
+            }
+        }
+        val word = styled[0]
+        val before = ic.getTextBeforeCursor(1, 0)?.toString() ?: ""
+        // Words glide together with a space between, like Gboard.
+        val needsSpace = before.isNotEmpty() && !before[0].isWhitespace() && before[0] !in OPENERS
+        undo = null
+        autoSpaced = false
+        lastSpaceTap = 0
+        ic.beginBatchEdit()
+        ic.commitText(if (needsSpace) " $word" else word, 1)
+        ic.endBatchEdit()
+        glide = GlideResult(word, styled.drop(1).take(2))
+        if (shift == ShiftState.ON) shift = ShiftState.OFF
+        skipCapsCheck = true
         render()
     }
 
@@ -984,6 +1079,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         private const val DOUBLE_TAP_MS = 350L
         private const val DOUBLE_SPACE_MS = 450L
         private const val PUNCTUATION = ".,!?;:"
+        /** No space is added between these and a glided word. */
+        private const val OPENERS = "([{\"'‘“@#/-"
         /** "example.com", "bbc.co.uk": a dot joining letters with no space after it. */
         private val ADDRESS_DOT = Regex("[A-Za-z0-9]\\.[A-Za-z]")
         private const val STRIP_DELAY_MS = 30L
