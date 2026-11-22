@@ -7300,6 +7300,12 @@ currys
 waitrose
 ocado
 deliveroo
+gmail
+googlemail
+hotmail
+icloud
+protonmail
+btinternet
 nasa
 spock
 marion
@@ -49992,9 +49998,3 @@ simile
 pallor
 somepony
 homeschooled
-appendages
-windswept
-weirding
-densuke
-reki
-mcintosh

@@ -351,13 +351,25 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val word = before.substring(i).trimStart('\'', '’').replace('’', '\'')
         val rest = before.substring(0, i)
         val (prev2, prev) = previousWords(rest)
+        // Inside an email or web address ("name@gmail", "bbc.co.uk", "@sarah")? Then the
+        // letters aren't a word to correct, suggest or learn: treat it as no word at all.
+        val inAddress = word.isNotEmpty() && looksLikeAddress(before)
         return Ctx(
             prev2 = prev2,
             prev = prev,
-            word = word,
+            word = if (inAddress) "" else word,
             afterSpace = word.isEmpty() && (rest.endsWith(" ") || rest.endsWith("\n")),
             fieldStart = before.isBlank(),
         )
+    }
+
+    /** Whether the text run touching the cursor (back to the last space) is an address. */
+    private fun looksLikeAddress(before: String): Boolean {
+        var start = before.length
+        while (start > 0 && !before[start - 1].isWhitespace()) start--
+        val token = before.substring(start)
+        return '@' in token || "://" in token || '/' in token ||
+            token.startsWith("www.", ignoreCase = true) || ADDRESS_DOT.containsMatchIn(token)
     }
 
     /** The one or two words before [rest], or START where a sentence begins. */
@@ -828,6 +840,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         private const val DOUBLE_TAP_MS = 350L
         private const val DOUBLE_SPACE_MS = 450L
         private const val PUNCTUATION = ".,!?;:"
+        /** "example.com", "bbc.co.uk": a dot joining letters with no space after it. */
+        private val ADDRESS_DOT = Regex("[A-Za-z0-9]\\.[A-Za-z]")
         private const val STRIP_DELAY_MS = 30L
     }
 }

@@ -42,7 +42,8 @@ words = [(w, c) for w, c in words if w not in fragments and w not in contraction
 words += list(contractions.items())
 # Texting words that subtitles rarely contain, so they're never "corrected"
 SLANG = ("pls plz idk tbh u brb lmao lmk imo smh ttyl np ty omw jk nvm fyi asap rn tho bc ily xoxo "
-         "aldi lidl tesco asda sainsburys morrisons primark argos currys greggs boots waitrose ocado deliveroo")
+         "aldi lidl tesco asda sainsburys morrisons primark argos currys greggs boots waitrose ocado deliveroo "
+         "gmail googlemail hotmail outlook icloud yahoo protonmail btinternet aol")
 have = {w for w, _ in words}
 words += [(w, 4000) for w in SLANG.split() if w not in have]
 words.sort(key=lambda wc: -wc[1])
