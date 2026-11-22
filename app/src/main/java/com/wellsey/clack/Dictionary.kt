@@ -598,10 +598,22 @@ class Dictionary private constructor(context: Context) {
 
     // ---- My words screen -------------------------------------------------------
 
-    /** Words you've taught Clack, A–Z, with how often you've used each. */
+    /** True once the built-in word list has loaded. */
+    val isLoaded: Boolean get() = loaded
+
+    /**
+     * Words you've taught Clack, A–Z, with how often you've used each: words that
+     * aren't in the built-in dictionary, plus dictionary words it has learned to
+     * capitalise for you ("Sarah"). Ordinary words you type are still counted to rank
+     * suggestions, but aren't listed.
+     */
     @Synchronized
     fun learnedWords(): List<Pair<String, Int>> =
-        learned.entries.filter { !isMissingApostrophe(it.key) }
+        learned.entries.filter { (w, _) ->
+            if (isMissingApostrophe(w)) return@filter false
+            val learnedCapital = (caps[w]?.second ?: 0) >= LEARN_THRESHOLD
+            !rank.containsKey(w) || learnedCapital
+        }
             .map { (caps[it.key]?.first ?: it.key) to it.value }
             .sortedBy { it.first.lowercase() }
 

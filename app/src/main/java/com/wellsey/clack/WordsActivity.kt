@@ -39,8 +39,8 @@ class WordsActivity : Activity() {
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         })
         root.addView(TextView(this).apply {
-            text = "Words Clack has learned from your typing. They're never corrected and are " +
-                "offered as suggestions. Delete any typos it picked up."
+            text = "Words Clack has learned from you that aren't in its dictionary, like names and " +
+                "slang. They're never corrected and are offered as suggestions. Delete any typos it picked up."
             textSize = 14f
             alpha = 0.8f
             setPadding(0, dp(6), 0, dp(14))
@@ -98,6 +98,12 @@ class WordsActivity : Activity() {
     }
 
     private fun refresh() {
+        if (!dictionary.isLoaded) {
+            // The built-in word list is still loading: try again in a moment
+            summary.text = "Loading…"
+            list.postDelayed({ refresh() }, 300)
+            return
+        }
         val q = search.text.toString().trim().lowercase()
         val all = dictionary.learnedWords()
         val matches = if (q.isEmpty()) all else all.filter { it.first.lowercase().contains(q) }
