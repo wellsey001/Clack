@@ -259,7 +259,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         dictionary.learnThreshold = prefs.learnAfter
         val glass = prefs.theme == "glass"
         val palette = when {
-            glass -> Palette.GLASS
+            glass -> Palette.glassFor(this)
             dark -> Palette.DARK
             else -> Palette.LIGHT
         }

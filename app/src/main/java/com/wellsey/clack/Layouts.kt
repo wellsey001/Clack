@@ -45,7 +45,7 @@ data class Palette(
     val icon: Int,
 ) {
     val isDark: Boolean get() = this !== LIGHT
-    val isGlass: Boolean get() = this === GLASS
+    val isGlass: Boolean get() = background == GLASS.background
 
     companion object {
         val DARK = Palette(
@@ -64,6 +64,27 @@ data class Palette(
             divider = 0xFF3C3E43.toInt(),
             icon = 0xFFC4C7C5.toInt(),
         )
+        /**
+         * The Glass palette using Perch's current accent (taken from the wallpaper), so the keyboard
+         * and home screen match. Falls back to the built-in violet when Perch isn't installed.
+         */
+        fun glassFor(context: android.content.Context): Palette {
+            val accent = try {
+                context.contentResolver.query(
+                    android.net.Uri.parse("content://com.wellsey.perch.theme"), null, null, null, null,
+                )?.use { c -> if (c.moveToFirst()) c.getInt(c.getColumnIndexOrThrow("accent")) else null }
+            } catch (e: Exception) {
+                null
+            } ?: return GLASS
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(accent, hsv)
+            // Deepen it a little so white text on the Enter key stays readable.
+            hsv[1] = maxOf(hsv[1], 0.55f)
+            hsv[2] = minOf(hsv[2], 0.78f)
+            val deep = android.graphics.Color.HSVToColor(hsv)
+            return GLASS.copy(accent = deep, accentText = 0xFFFFFFFF.toInt())
+        }
+
         /** Translucent "glass" to match Perch: drawn over a live blur or an Aurora gradient. */
         val GLASS = Palette(
             background = 0x8C14122E.toInt(),

@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Read Perch's accent colour so the Glass theme matches the home screen -->
+    <queries>
+        <package android:name="com.wellsey.perch" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
