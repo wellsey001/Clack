@@ -141,9 +141,33 @@ class SetupActivity : Activity() {
 
         root.addView(section("Theme"))
         root.addView(radio(
-            listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark"),
+            listOf("system" to "Follow system", "light" to "Light", "dark" to "Dark", "glass" to "Glass"),
             prefs.theme,
         ) { prefs.theme = it })
+
+        if (Build.VERSION.SDK_INT < 31) {
+            root.addView(body("Glass shows a colour gradient behind the keys on this Android version."))
+        } else {
+            root.addView(body("Glass blurs the app behind the keyboard. With battery saver on, it shows a gradient instead."))
+        }
+
+        root.addView(section("Keys"))
+        root.addView(toggle("Key borders", prefs.keyBorders) { prefs.keyBorders = it })
+        root.addView(body("Letter size"))
+        root.addView(radio(
+            listOf("small" to "Small", "normal" to "Normal", "large" to "Large"),
+            prefs.labelSize,
+        ) { prefs.labelSize = it })
+        root.addView(body("Space between keys"))
+        root.addView(radio(
+            listOf("tight" to "Tight", "normal" to "Normal", "roomy" to "Roomy"),
+            prefs.keySpacing,
+        ) { prefs.keySpacing = it })
+        root.addView(body("One-handed mode (also in the keyboard's toolbar)"))
+        root.addView(radio(
+            listOf("off" to "Off", "left" to "Left", "right" to "Right"),
+            prefs.oneHanded,
+        ) { prefs.oneHanded = it })
 
         root.addView(section("Keyboard height"))
         root.addView(radio(
@@ -270,7 +294,10 @@ class SetupActivity : Activity() {
         current: String,
         onPick: (String) -> Unit,
     ): RadioGroup {
-        val group = RadioGroup(this).apply { orientation = RadioGroup.HORIZONTAL }
+        // Four or more choices stack vertically so long labels fit
+        val group = RadioGroup(this).apply {
+            orientation = if (options.size > 3) RadioGroup.VERTICAL else RadioGroup.HORIZONTAL
+        }
         for ((value, label) in options) {
             val rb = RadioButton(this).apply {
                 id = View.generateViewId()

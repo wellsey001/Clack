@@ -60,7 +60,26 @@ class Prefs(context: Context) {
         get() = bool("popup_hints", true)
         set(v) = setBool("popup_hints", v)
 
-    /** "system", "light" or "dark". */
+    var keyBorders: Boolean
+        get() = bool("key_borders", false)
+        set(v) = setBool("key_borders", v)
+
+    /** "small", "normal" or "large". */
+    var labelSize: String
+        get() = sp.getString("label_size", "normal") ?: "normal"
+        set(v) = sp.edit().putString("label_size", v).apply()
+
+    /** "tight", "normal" or "roomy". */
+    var keySpacing: String
+        get() = sp.getString("key_spacing", "normal") ?: "normal"
+        set(v) = sp.edit().putString("key_spacing", v).apply()
+
+    /** "off", "left" or "right". */
+    var oneHanded: String
+        get() = sp.getString("one_handed", "off") ?: "off"
+        set(v) = sp.edit().putString("one_handed", v).apply()
+
+    /** "system", "light", "dark" or "glass". */
     var theme: String
         get() = sp.getString("theme", "system") ?: "system"
         set(v) = sp.edit().putString("theme", v).apply()

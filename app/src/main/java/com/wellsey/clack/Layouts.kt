@@ -44,7 +44,8 @@ data class Palette(
     val divider: Int,
     val icon: Int,
 ) {
-    val isDark: Boolean get() = this === DARK
+    val isDark: Boolean get() = this !== LIGHT
+    val isGlass: Boolean get() = this === GLASS
 
     companion object {
         val DARK = Palette(
@@ -62,6 +63,23 @@ data class Palette(
             popup = 0xFF4A4D53.toInt(),
             divider = 0xFF3C3E43.toInt(),
             icon = 0xFFC4C7C5.toInt(),
+        )
+        /** Translucent "glass" to match Perch: drawn over a live blur or an Aurora gradient. */
+        val GLASS = Palette(
+            background = 0x8C14122E.toInt(),
+            key = 0x2EFFFFFF,
+            keyPressed = 0x5CFFFFFF,
+            text = 0xFFFFFFFF.toInt(),
+            fnKey = 0x1AFFFFFF,
+            fnText = 0xFFFFFFFF.toInt(),
+            on = 0xFFFFFFFF.toInt(),
+            onText = 0xFF1B1446.toInt(),
+            accent = 0xFF7C3AED.toInt(),
+            accentText = 0xFFFFFFFF.toInt(),
+            hint = 0xB3FFFFFF.toInt(),
+            popup = 0xF0302A4A.toInt(),
+            divider = 0x40FFFFFF,
+            icon = 0xE6FFFFFF.toInt(),
         )
         val LIGHT = Palette(
             background = 0xFFE9EBF0.toInt(),

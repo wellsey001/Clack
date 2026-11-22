@@ -66,7 +66,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         }
     }
 
-    private val toolbar = intArrayOf(ACTION_EMOJI, ACTION_CLIPBOARD, ACTION_SETTINGS, ACTION_SWITCH, ACTION_HIDE)
+    private val toolbar = intArrayOf(ACTION_EMOJI, ACTION_CLIPBOARD, ACTION_ONE_HANDED, ACTION_SETTINGS, ACTION_SWITCH, ACTION_HIDE)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), dp(46f).toInt())
@@ -174,6 +174,7 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
                     ACTION_SETTINGS -> Icons.gear(canvas, iconPaint, cx, cy, size)
                     ACTION_SWITCH -> Icons.globe(canvas, iconPaint, cx, cy, size)
                     ACTION_HIDE -> Icons.chevronDown(canvas, iconPaint, cx, cy, size)
+                    ACTION_ONE_HANDED -> Icons.oneHanded(canvas, iconPaint, cx, cy, size)
                 }
             }
         }
@@ -224,5 +225,6 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         const val ACTION_HIDE = 5
         const val ACTION_PASTE_CODE = 6
         const val ACTION_DISMISS_CODE = 7
+        const val ACTION_ONE_HANDED = 8
     }
 }

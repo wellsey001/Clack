@@ -87,4 +87,15 @@ object Icons {
         c.drawLine(cx - s * 0.4f, cy, cx - s * 0.1f, cy - s * 0.3f, p)
         c.drawLine(cx - s * 0.4f, cy, cx - s * 0.1f, cy + s * 0.3f, p)
     }
+
+    /** A narrow phone with the keyboard pushed to one side. */
+    fun oneHanded(c: Canvas, p: Paint, cx: Float, cy: Float, s: Float) {
+        p.style = Paint.Style.STROKE
+        rect.set(cx - s * 0.3f, cy - s * 0.5f, cx + s * 0.3f, cy + s * 0.5f)
+        c.drawRoundRect(rect, s * 0.1f, s * 0.1f, p)
+        rect.set(cx - s * 0.05f, cy + s * 0.05f, cx + s * 0.2f, cy + s * 0.35f)
+        p.style = Paint.Style.FILL_AND_STROKE
+        c.drawRoundRect(rect, s * 0.04f, s * 0.04f, p)
+        p.style = Paint.Style.STROKE
+    }
 }

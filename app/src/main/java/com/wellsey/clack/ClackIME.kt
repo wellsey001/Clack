@@ -43,6 +43,9 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private var searchView: EmojiSearchView? = null
     private var searchQuery = ""
     private var clipPanel: ClipboardPanelView? = null
+    private var inputRoot: LinearLayout? = null
+    /** False if live blur would cover more than the keyboard on this phone. */
+    private var blurFitsKeyboard = true
     private var phoneField = false
     private var passwordField = false
     private var baseKeyHeightPx = 0f
@@ -143,6 +146,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         searchView = q
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            inputRoot = this
             addView(q)
             addView(s)
             addView(e)
@@ -245,7 +249,12 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             "dark" -> true
             else -> night
         }
-        val palette = if (dark) Palette.DARK else Palette.LIGHT
+        val glass = prefs.theme == "glass"
+        val palette = when {
+            glass -> Palette.GLASS
+            dark -> Palette.DARK
+            else -> Palette.LIGHT
+        }
         kb.palette = palette
         strip?.palette = palette
         emojiPanel?.palette = palette
@@ -261,7 +270,68 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         baseKeyHeightPx = baseDp * (if (landscape) 0.78f else 1f) * resources.displayMetrics.density
         kb.keyHeightPx = baseKeyHeightPx
         kb.showPreview = prefs.keyPreview
+        kb.keyBorders = prefs.keyBorders
+        kb.labelScale = when (prefs.labelSize) {
+            "small" -> 0.88f
+            "large" -> 1.15f
+            else -> 1f
+        }
+        kb.setSpacing(when (prefs.keySpacing) {
+            "tight" -> 0
+            "roomy" -> 2
+            else -> 1
+        })
+        kb.oneHanded = when (prefs.oneHanded) {
+            "left" -> -1
+            "right" -> 1
+            else -> 0
+        }
         tintNavigationBar(palette)
+        applyGlass(glass)
+    }
+
+    /**
+     * Glass theme: on Android 12+ the keyboard window blurs the app behind it, live.
+     * Where that isn't available (older Android, battery saver, phones without it),
+     * an Aurora gradient like Perch's sits behind the translucent keys instead.
+     */
+    private fun applyGlass(on: Boolean) {
+        val w = window?.window ?: return
+        val root = inputRoot ?: return
+        w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        var blurring = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val wm = getSystemService(android.view.WindowManager::class.java)
+            blurring = on && blurFitsKeyboard && wm?.isCrossWindowBlurEnabled == true
+            w.setBackgroundBlurRadius(if (blurring) (34 * resources.displayMetrics.density).toInt() else 0)
+            if (blurring) {
+                // Safety check: if the keyboard's window is much taller than the keyboard,
+                // a blur would smear the whole app. Fall back to the gradient there.
+                root.post {
+                    val decorH = w.decorView.height
+                    if (decorH > 0 && root.height > 0 && decorH > root.height * 1.6f && blurFitsKeyboard) {
+                        blurFitsKeyboard = false
+                        applyGlass(prefs.theme == "glass")
+                    }
+                }
+            }
+        }
+        root.background = if (on && !blurring) {
+            android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF2B1B6B.toInt(), 0xFF12407A.toInt(), 0xFF0C5C6B.toInt()),
+            )
+        } else {
+            null
+        }
+    }
+
+    override fun onOneHandedAction(action: Int) {
+        prefs.oneHanded = if (action == KeyboardView.ONE_HANDED_SWAP) {
+            if (prefs.oneHanded == "left") "right" else "left"
+        } else {
+            "off"
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -732,6 +802,9 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 if (!switched) getSystemService(InputMethodManager::class.java)?.showInputMethodPicker()
             }
             SuggestionStripView.ACTION_HIDE -> requestHideSelf(0)
+            SuggestionStripView.ACTION_ONE_HANDED -> {
+                prefs.oneHanded = if (prefs.oneHanded == "off") "right" else "off"
+            }
             SuggestionStripView.ACTION_PASTE_CODE -> {
                 OtpStore.current()?.let { currentInputConnection?.commitText(it, 1) }
                 OtpStore.clear(used = true)

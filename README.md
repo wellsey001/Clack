@@ -24,6 +24,8 @@
 | | |
 |---|---|
 | ⌨️ **Feels like Gboard** | Material You colours, flat keys, a pill-shaped enter key and light/dark themes that follow your system. |
+| 🫧 **Glass theme** | A frosted, translucent keyboard that blurs the app behind it (Android 12+), matching the Perch launcher. |
+| ✋ **Make it yours** | Key borders, letter size, key spacing and a one-handed mode (left or right). |
 | 🔤 **Spell check** | Misspelt words get a fix in the middle of the suggestion bar: *teh → the*, *recieve → receive*, *dont → don't*. |
 | 🧩 **Fixes run-together sentences** | Missed spaces, a letter hit instead of the space bar, and a typo or two: *seeyoutomorrow* → **see you tomorrow**, *thankbyou* → **thank you**, *helloohowareyou* → **hello how are you**. |
 | ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |

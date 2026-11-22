@@ -32,6 +32,8 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         /** Swiping left from delete: select this many words back (0 = none). */
         fun onDeleteSwipe(words: Int)
         fun onDeleteSwipeEnd(commit: Boolean)
+        /** One-handed mode side buttons: [ONE_HANDED_SWAP] or [ONE_HANDED_EXIT]. */
+        fun onOneHandedAction(action: Int)
     }
 
     private val density = resources.displayMetrics.density
@@ -74,6 +76,35 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     var showPreview = true
     var showHints = true
 
+    /** Outline every key. */
+    var keyBorders = false
+        set(value) { field = value; invalidate() }
+
+    /** Letter size: 1 = normal. */
+    var labelScale = 1f
+        set(value) { field = value; invalidate() }
+
+    /** One-handed mode: 0 off, -1 keys on the left, 1 keys on the right. */
+    var oneHanded = 0
+        set(value) {
+            if (field == value) return
+            field = value
+            computeRects()
+            invalidate()
+        }
+
+    /** Space between keys: 0 tight, 1 normal, 2 roomy. */
+    fun setSpacing(level: Int) {
+        val (x, y) = when (level) {
+            0 -> 3f to 5f
+            2 -> 8f to 11f
+            else -> 5f to 8f
+        }
+        gapX = dp(x)
+        gapY = dp(y)
+        invalidate()
+    }
+
     // ---- geometry ---------------------------------------------------------
 
     private class KeyRect(val key: Key, val rect: RectF)
@@ -82,8 +113,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private val padTop = dp(6f)
     private val padBottom = dp(4f)
     private val padSide = dp(3f)
-    private val gapX = dp(5f)
-    private val gapY = dp(8f)
+    private var gapX = dp(5f)
+    private var gapY = dp(8f)
+    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val sideRect = RectF()
+    private var sideDown = false
     private val radius = dp(7f)
 
     // ---- paints -----------------------------------------------------------
@@ -148,11 +182,17 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     private fun computeRects() {
         keyRects.clear()
         if (width == 0) return
-        val unit = (width - 2 * padSide) / 10f
+        // One-handed mode: keys take 82% of the width on one side; buttons fill the rest.
+        val usable = if (oneHanded != 0) width * ONE_HANDED_WIDTH else width.toFloat()
+        val offset = if (oneHanded == 1) width - usable else 0f
+        if (oneHanded == -1) sideRect.set(usable, padTop, width.toFloat(), padTop + rows.size * keyHeightPx)
+        else if (oneHanded == 1) sideRect.set(0f, padTop, offset, padTop + rows.size * keyHeightPx)
+        else sideRect.setEmpty()
+        val unit = (usable - 2 * padSide) / 10f
         var y = padTop
         for (row in rows) {
             val total = row.fold(0f) { acc, k -> acc + k.width }
-            var x = padSide + (10f - total) / 2f * unit
+            var x = offset + padSide + (10f - total) / 2f * unit
             for (key in row) {
                 val w = key.width * unit
                 keyRects.add(KeyRect(key, RectF(x, y, x + w, y + keyHeightPx)))
@@ -191,6 +231,30 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
             drawPreview(canvas, p)
         }
         if (popupChars.isNotEmpty()) drawPopup(canvas)
+        if (oneHanded != 0) drawSideButtons(canvas)
+    }
+
+    private fun drawSideButtons(c: Canvas) {
+        val cx = sideRect.centerX()
+        val r = minOf(sideRect.width() * 0.34f, dp(20f))
+        val swapY = sideRect.top + sideRect.height() * 0.32f
+        val exitY = sideRect.top + sideRect.height() * 0.68f
+        keyPaint.color = palette.fnKey
+        c.drawCircle(cx, swapY, r, keyPaint)
+        c.drawCircle(cx, exitY, r, keyPaint)
+        iconPaint.color = palette.fnText
+        iconPaint.style = Paint.Style.STROKE
+        iconPaint.strokeWidth = dp(1.8f)
+        val a = r * 0.45f
+        // swap sides: ⇄
+        c.drawLine(cx - a, swapY - a * 0.4f, cx + a, swapY - a * 0.4f, iconPaint)
+        c.drawLine(cx + a, swapY - a * 0.4f, cx + a * 0.5f, swapY - a * 0.85f, iconPaint)
+        c.drawLine(cx + a, swapY + a * 0.4f, cx - a, swapY + a * 0.4f, iconPaint)
+        c.drawLine(cx - a, swapY + a * 0.4f, cx - a * 0.5f, swapY + a * 0.85f, iconPaint)
+        // full width: ↔ with end bars
+        c.drawLine(cx - a, exitY, cx + a, exitY, iconPaint)
+        c.drawLine(cx - a, exitY - a * 0.6f, cx - a, exitY + a * 0.6f, iconPaint)
+        c.drawLine(cx + a, exitY - a * 0.6f, cx + a, exitY + a * 0.6f, iconPaint)
     }
 
     private fun drawKey(c: Canvas, kr: KeyRect, isPressed: Boolean) {
@@ -211,6 +275,11 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
         val rad = if (k.code == Key.ENTER) tmp.height() / 2f else radius
         keyPaint.color = bg
         c.drawRoundRect(tmp, rad, rad, keyPaint)
+        if (keyBorders) {
+            borderPaint.color = palette.divider
+            borderPaint.strokeWidth = dp(1f)
+            c.drawRoundRect(tmp, rad, rad, borderPaint)
+        }
         if (isPressed && (k.isFunction || k.code == Key.ENTER || shiftOn)) {
             keyPaint.color = if (palette.isDark) 0x22FFFFFF else 0x22000000
             c.drawRoundRect(tmp, rad, rad, keyPaint)
@@ -248,7 +317,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     private fun drawText(c: Canvas, s: String, cx: Float, cy: Float, color: Int, size: Float) {
         textPaint.color = color
-        textPaint.textSize = size
+        textPaint.textSize = size * labelScale
         c.drawText(s, cx, cy - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
     }
 
@@ -354,6 +423,23 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        // One-handed side buttons
+        if (oneHanded != 0) {
+            if (e.actionMasked == MotionEvent.ACTION_DOWN && sideRect.contains(e.x, e.y)) {
+                sideDown = true
+                return true
+            }
+            if (sideDown) {
+                if (e.actionMasked == MotionEvent.ACTION_UP && sideRect.contains(e.x, e.y)) {
+                    val upper = e.y < sideRect.centerY()
+                    listener.onOneHandedAction(if (upper) ONE_HANDED_SWAP else ONE_HANDED_EXIT)
+                }
+                if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    sideDown = false
+                }
+                return true
+            }
+        }
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> startPress(e.getPointerId(0), e.x, e.y)
             MotionEvent.ACTION_POINTER_DOWN -> {
@@ -506,6 +592,9 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
     }
 
     companion object {
+        const val ONE_HANDED_SWAP = 0
+        const val ONE_HANDED_EXIT = 1
+        private const val ONE_HANDED_WIDTH = 0.82f
         private const val LONG_PRESS = 320L
         private const val SPACE_LONG_PRESS = 600L
         private const val REPEAT_DELAY = 400L
