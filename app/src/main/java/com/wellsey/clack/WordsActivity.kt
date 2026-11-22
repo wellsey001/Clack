@@ -28,6 +28,7 @@ class WordsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dictionary = Dictionary.get(this)
+        dictionary.learnThreshold = Prefs(this).learnAfter
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -110,7 +111,8 @@ class WordsActivity : Activity() {
         list.removeAllViews()
         val shown = matches.take(MAX_SHOWN)
         summary.text = when {
-            all.isEmpty() -> "No learned words yet. Keep typing and they'll appear here."
+            all.isEmpty() -> "No learned words yet. A new word appears here once you've used it " +
+                "${dictionary.learnThreshold} times."
             matches.size > shown.size -> "Showing ${shown.size} of ${matches.size}. Search to find more."
             else -> "${matches.size} word${if (matches.size == 1) "" else "s"}"
         }

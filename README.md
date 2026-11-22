@@ -31,7 +31,7 @@
 | ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |
 | 🔮 **Next-word prediction** | After a space, Clack suggests what usually comes next: *see you* → **soon**, *on my* → **way**. It learns your own phrases too. |
 | 🔠 **Smart capitals** | *i* → **I**, *monday* → **Monday**, and names you write with a capital, like *sarah* → **Sarah**. Press delete to undo. |
-| 🧠 **Learns your words** | Type a word twice and Clack treats it as correct and suggests it. Names, slang and in-jokes included. |
+| 🧠 **Learns your words** | Use a new word a few times (3 by default, you choose) and Clack treats it as correct and suggests it, so one-off typos never stick. Names, slang and in-jokes included. |
 | 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. **Search** by name (*pizza*, *love*, *cat*). |
 | ¯\\\_(ツ)\_/¯ **Emoticons and kaomoji** | Tabs of classic `:)` `<3` `^_^` faces and kaomoji, one tap away. |
 | 📋 **Clipboard history** | Your recent copies from the last hour, a tap away; pin the ones you paste often. Passwords copied from password managers are never stored. |

@@ -8,7 +8,7 @@ import java.util.Arrays
  * Word completions and spelling corrections.
  *
  * Uses a 50,000-word English list ranked by how common each word is, plus the
- * words you type yourself. A word you've used twice counts as correctly spelt
+ * words you type yourself. A word you've used a few times (learnThreshold) counts as correctly spelt
  * from then on. Learned words stay on the phone and are never taken from
  * password, email or web address fields.
  */
@@ -90,14 +90,14 @@ class Dictionary private constructor(context: Context) {
         }.apply { isDaemon = true; start() }
     }
 
-    /** True if the word is in the dictionary or you've used it at least twice. */
+    /** True if the word is in the dictionary or you've used it learnThreshold times. */
     @Synchronized
     fun isKnown(word: String): Boolean {
         if (!loaded) return true // don't flag everything while still loading
         val w = word.lowercase()
         if (rank.containsKey(w)) return true
         if (isMissingApostrophe(w)) return false
-        return (learned[w] ?: 0) >= LEARN_THRESHOLD
+        return (learned[w] ?: 0) >= learnThreshold
     }
 
     /** True for "isnt", "dont", "im": a contraction typed without its apostrophe. */
@@ -330,7 +330,7 @@ class Dictionary private constructor(context: Context) {
     /** How common a word is, for splitting (your own frequent words count as common). */
     private fun segRank(w: String): Int {
         rank[w]?.let { return it }
-        return if ((learned[w] ?: 0) >= LEARN_THRESHOLD && !isMissingApostrophe(w)) 3_000 else 1_000_000
+        return if (isLearnedWord(w)) 3_000 else 1_000_000
     }
 
     private fun pieceAllowed(w: String): Boolean {
@@ -370,11 +370,15 @@ class Dictionary private constructor(context: Context) {
     fun reject(word: String) {
         autoKey = null
         segKey = null
-        rejected.add(word.lowercase())
-        caps.remove(word.lowercase()) // undoing a capital also forgets it
+        val lower = word.lowercase()
+        rejected.add(lower)
+        caps.remove(lower) // undoing a capital also forgets it
+        // Undoing a correction means you meant it: learn the word straight away
+        if (word.length in 2..32 && word.all { it.isLetter() || it == '\'' }) {
+            learned[lower] = maxOf(learned[lower] ?: 0, learnThreshold)
+        }
         dirty = true
-        learn(word)
-        learn(word) // counts as known straight away
+        cacheKey = null
     }
 
     /**
@@ -392,7 +396,7 @@ class Dictionary private constructor(context: Context) {
             }
         }
         for (w in bucket) consider(w)
-        for (w in learned.keys) if (w[0] == t[0] && !isMissingApostrophe(w)) consider(w)
+        for (w in learned.keys) if (w[0] == t[0] && isLearnedWord(w)) consider(w)
     }
 
     /** Edit distance counting swapped neighbours as one mistake; stops early past [max]. */
@@ -423,7 +427,7 @@ class Dictionary private constructor(context: Context) {
     }
 
     private fun isCandidate(w: String) =
-        rank.containsKey(w) || (learned.containsKey(w) && !isMissingApostrophe(w))
+        rank.containsKey(w) || isLearnedWord(w)
 
     private fun freqScore(w: String): Double {
         val r = rank[w]
@@ -443,7 +447,8 @@ class Dictionary private constructor(context: Context) {
             n++
         }
         for (w in learned.keys) {
-            if (w.length > p.length && w.startsWith(p) && !isMissingApostrophe(w)) {
+            // Dictionary words get a boost from your use; new words only once learned
+            if (w.length > p.length && w.startsWith(p) && (rank.containsKey(w) || isLearnedWord(w))) {
                 scores[w] = completionScore(w, p.length)
             }
         }
@@ -526,7 +531,8 @@ class Dictionary private constructor(context: Context) {
         addFrom(prev, 1.0)
         return scores.entries.sortedByDescending { it.value }
             .map { it.key }
-            .filter { !isMissingApostrophe(it) }
+            // never predict a one-off typo: only dictionary words or properly learned ones
+            .filter { !isMissingApostrophe(it) && (rank.containsKey(it) || isLearnedWord(it)) }
             .take(limit)
             .map { capitalisation(it) ?: it }
     }
@@ -567,7 +573,7 @@ class Dictionary private constructor(context: Context) {
         dirty = true
     }
 
-    /** "i" → "I", "monday" → "Monday", "sarah" → "Sarah" once you've written it that way twice. */
+    /** "i" → "I", "monday" → "Monday", "sarah" → "Sarah" once you've written it that way often enough. */
     @Synchronized
     fun capitalisation(word: String): String? {
         if (word.isEmpty() || word.any { it.isUpperCase() }) return null
@@ -575,7 +581,7 @@ class Dictionary private constructor(context: Context) {
         if (word == "i") return "I"
         if (word.startsWith("i'") && rank.containsKey(word)) return "I" + word.substring(1)
         ALWAYS_CAPS[word]?.let { return it }
-        caps[word]?.let { (form, count) -> if (count >= LEARN_THRESHOLD) return form }
+        caps[word]?.let { (form, count) -> if (count >= learnThreshold) return form }
         return null
     }
 
@@ -598,6 +604,22 @@ class Dictionary private constructor(context: Context) {
 
     // ---- My words screen -------------------------------------------------------
 
+    /**
+     * How many times you must use a word that isn't in the dictionary before Clack
+     * treats it as a real word (suggests it, stops correcting it, lists it in My words).
+     */
+    @Volatile var learnThreshold = 3
+        set(value) {
+            field = value.coerceIn(1, 10)
+            cacheKey = null
+            autoKey = null
+            segKey = null
+        }
+
+    /** A word that isn't in the dictionary but you've used often enough to count. */
+    private fun isLearnedWord(w: String) =
+        (learned[w] ?: 0) >= learnThreshold && !isMissingApostrophe(w)
+
     /** True once the built-in word list has loaded. */
     val isLoaded: Boolean get() = loaded
 
@@ -611,8 +633,8 @@ class Dictionary private constructor(context: Context) {
     fun learnedWords(): List<Pair<String, Int>> =
         learned.entries.filter { (w, _) ->
             if (isMissingApostrophe(w)) return@filter false
-            val learnedCapital = (caps[w]?.second ?: 0) >= LEARN_THRESHOLD
-            !rank.containsKey(w) || learnedCapital
+            val learnedCapital = (caps[w]?.second ?: 0) >= learnThreshold
+            if (rank.containsKey(w)) learnedCapital else isLearnedWord(w)
         }
             .map { (caps[it.key]?.first ?: it.key) to it.value }
             .sortedBy { it.first.lowercase() }
@@ -623,8 +645,8 @@ class Dictionary private constructor(context: Context) {
         val w = word.trim()
         if (w.isEmpty() || w.length > 32 || !w.all { it.isLetter() || it == '\'' || it == '-' }) return
         val lower = w.lowercase()
-        learned[lower] = maxOf(learned[lower] ?: 0, LEARN_THRESHOLD)
-        if (w != lower && w[0].isUpperCase()) caps[lower] = w to LEARN_THRESHOLD
+        learned[lower] = maxOf(learned[lower] ?: 0, learnThreshold)
+        if (w != lower && w[0].isUpperCase()) caps[lower] = w to learnThreshold
         rejected.remove(lower)
         dirty = true
         cacheKey = null
@@ -662,7 +684,6 @@ class Dictionary private constructor(context: Context) {
             put("usa", "USA")
             put("tv", "TV")
         }
-        const val LEARN_THRESHOLD = 2
         private const val MIN_AUTOCORRECT_SCORE = 90.0
         private const val MIN_TWO_EDIT_SCORE = 150.0
 

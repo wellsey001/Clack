@@ -74,6 +74,11 @@ class SetupActivity : Activity() {
         root.addView(toggle("Number hints on top row (when number row is off)", prefs.popupHints) { prefs.popupHints = it })
         root.addView(toggle("Pop-up preview on key press", prefs.keyPreview) { prefs.keyPreview = it })
 
+        root.addView(body("Learn a new word after using it"))
+        root.addView(radio(
+            listOf("2" to "2 times", "3" to "3 times", "5" to "5 times"),
+            prefs.learnAfter.toString(),
+        ) { prefs.learnAfter = it.toInt() })
         root.addView(Button(this).apply {
             text = "My words"
             setOnClickListener { startActivity(Intent(this@SetupActivity, WordsActivity::class.java)) }
@@ -179,13 +184,13 @@ class SetupActivity : Activity() {
         root.addView(body(
             "• Hold a key for accents and symbols, then slide to pick one\n" +
                 "• Tap a suggestion to finish or fix a word\n" +
-                "• Words you use twice are learned; long-press a suggestion to forget one\n" +
+                "• New words are learned once you've used them a few times; long-press a suggestion to forget one\n" +
                 "• Press delete straight after an auto-correction to undo it\n" +
                 "• Missed the space bar? \"seeyoutomorrow\" becomes \"see you tomorrow\"\n" +
                 "• Long-press an emoji to pick a skin tone\n" +
                 "• Tap the clipboard in the toolbar for recent copies; hold one to pin it\n" +
                 "• Tap 🔍 in the emoji panel to search (try \"pizza\" or \"love\")\n" +
-                "• Names you write with a capital twice are capitalised for you\n" +
+                "• Names you write with a capital a few times are capitalised for you\n" +
                 "• Slide left from delete to delete whole words\n" +
                 "• Slide along the space bar to move the cursor\n" +
                 "• Hold the space bar to switch to another keyboard\n" +

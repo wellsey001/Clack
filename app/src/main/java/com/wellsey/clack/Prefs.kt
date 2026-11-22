@@ -60,6 +60,11 @@ class Prefs(context: Context) {
         get() = bool("popup_hints", true)
         set(v) = setBool("popup_hints", v)
 
+    /** Uses before a word that isn't in the dictionary is learned: 2, 3 or 5. */
+    var learnAfter: Int
+        get() = sp.getInt("learn_after", 3)
+        set(v) = sp.edit().putInt("learn_after", v).apply()
+
     var keyBorders: Boolean
         get() = bool("key_borders", false)
         set(v) = setBool("key_borders", v)

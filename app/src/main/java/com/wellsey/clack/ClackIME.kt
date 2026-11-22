@@ -117,6 +117,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         super.onCreate()
         prefs = Prefs(this)
         dictionary = Dictionary.get(this)
+        dictionary.learnThreshold = prefs.learnAfter
         prefs.sp.registerOnSharedPreferenceChangeListener(prefListener)
         OtpStore.addListener(otpListener)
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
@@ -249,6 +250,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             "dark" -> true
             else -> night
         }
+        dictionary.learnThreshold = prefs.learnAfter
         val glass = prefs.theme == "glass"
         val palette = when {
             glass -> Palette.GLASS
