@@ -19,6 +19,9 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".WordsActivity" android:exported="false" android:label="My words" />
+        <activity android:name=".ShortcutsActivity" android:exported="false" android:label="Text shortcuts" />
+
         <service
             android:name=".ClackIME"
             android:exported="true"

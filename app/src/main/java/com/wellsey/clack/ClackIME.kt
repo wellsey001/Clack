@@ -22,9 +22,9 @@ import android.widget.Toast
 import kotlin.math.abs
 
 class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripView.Listener,
-    EmojiPanelView.Listener, EmojiSearchView.Listener {
+    EmojiPanelView.Listener, EmojiSearchView.Listener, ClipboardPanelView.Listener {
 
-    private enum class Mode { LETTERS, SYMBOLS, MORE, EMOJI, SEARCH }
+    private enum class Mode { LETTERS, SYMBOLS, MORE, EMOJI, SEARCH, NUMPAD, CLIPBOARD }
 
     /** What's before the cursor: the word being typed and the one or two words before it. */
     private class Ctx(
@@ -42,6 +42,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     private var emojiPanel: EmojiPanelView? = null
     private var searchView: EmojiSearchView? = null
     private var searchQuery = ""
+    private var clipPanel: ClipboardPanelView? = null
+    private var phoneField = false
+    private var passwordField = false
+    private var baseKeyHeightPx = 0f
+    /** The text shortcut currently offered in the bar, if any. */
+    private var offeredShortcut: Shortcuts.Shortcut? = null
+    private val shortcuts by lazy { Shortcuts.get(this) }
+    private val clipHistory by lazy { ClipHistory.get(this) }
 
     private var mode = Mode.LETTERS
     private var shift = ShiftState.OFF
@@ -73,7 +81,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     // Verification codes: refresh the bar when one arrives, and again when it expires.
     private val otpListener = Runnable { uiHandler.post { render() } }
-    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { checkClipboardForCode() }
+    private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
+        checkClipboardForCode()
+        try {
+            clipHistory.add(getSystemService(ClipboardManager::class.java)?.primaryClip, this)
+        } catch (_: SecurityException) {
+        }
+        clipPanel?.refresh()
+    }
 
     /** After typing a letter we know shift should be off, so skip asking the app. */
     private var skipCapsCheck = false
@@ -98,7 +113,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
-        dictionary = Dictionary(this)
+        dictionary = Dictionary.get(this)
         prefs.sp.registerOnSharedPreferenceChangeListener(prefListener)
         OtpStore.addListener(otpListener)
         getSystemService(ClipboardManager::class.java)?.addPrimaryClipChangedListener(clipListener)
@@ -119,6 +134,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val s = SuggestionStripView(this, this)
         val k = KeyboardView(this, this)
         val e = EmojiPanelView(this, this).apply { visibility = View.GONE }
+        val c = ClipboardPanelView(this, this).apply { visibility = View.GONE }
+        clipPanel = c
         val q = EmojiSearchView(this, this).apply { visibility = View.GONE }
         strip = s
         keyboard = k
@@ -129,6 +146,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             addView(q)
             addView(s)
             addView(e)
+            addView(c)
             addView(k)
         }
         applyPrefs()
@@ -143,10 +161,12 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         super.onStartInputView(info, restarting)
         applyPrefs()
         if (!restarting) {
-            mode = when (info.inputType and InputType.TYPE_MASK_CLASS) {
+            val cls = info.inputType and InputType.TYPE_MASK_CLASS
+            phoneField = cls == InputType.TYPE_CLASS_PHONE
+            mode = when (cls) {
                 InputType.TYPE_CLASS_NUMBER,
                 InputType.TYPE_CLASS_PHONE,
-                InputType.TYPE_CLASS_DATETIME -> Mode.SYMBOLS
+                InputType.TYPE_CLASS_DATETIME -> Mode.NUMPAD
                 else -> Mode.LETTERS
             }
             shift = ShiftState.OFF
@@ -207,6 +227,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val noSuggestionsFlag = (type and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
         val incognito = (info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0
 
+        passwordField = isPassword || (cls == InputType.TYPE_CLASS_NUMBER &&
+            variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
         suggestionsAllowed = prefs.suggestions && isText && !isPassword
         autoCorrectAllowed = suggestionsAllowed && !isAddress && !noSuggestionsFlag
         learningAllowed = suggestionsAllowed && !isAddress && !incognito
@@ -228,6 +250,7 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         strip?.palette = palette
         emojiPanel?.palette = palette
         searchView?.palette = palette
+        clipPanel?.palette = palette
 
         val baseDp = when (prefs.height) {
             "short" -> 46f
@@ -235,7 +258,8 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             else -> 54f
         }
         val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        kb.keyHeightPx = baseDp * (if (landscape) 0.78f else 1f) * resources.displayMetrics.density
+        baseKeyHeightPx = baseDp * (if (landscape) 0.78f else 1f) * resources.displayMetrics.density
+        kb.keyHeightPx = baseKeyHeightPx
         kb.showPreview = prefs.keyPreview
         tintNavigationBar(palette)
     }
@@ -261,6 +285,10 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val searching = mode == Mode.SEARCH
         kb.lettersMode = mode == Mode.LETTERS || searching
         kb.shiftState = shift
+        // The keypad's keys are taller so it fills the same space as the letters.
+        if (baseKeyHeightPx > 0f) {
+            kb.keyHeightPx = if (mode == Mode.NUMPAD) baseKeyHeightPx * 1.2f else baseKeyHeightPx
+        }
         kb.showHints = prefs.popupHints && !prefs.numberRow
         kb.rows = when (mode) {
             Mode.LETTERS -> if (prefs.numberRow) Layouts.lettersWithNumbers else Layouts.letters
@@ -268,18 +296,21 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             Mode.MORE -> Layouts.more
             Mode.EMOJI -> Layouts.emojiBottom
             Mode.SEARCH -> Layouts.letters
+            Mode.NUMPAD -> if (phoneField) Layouts.phonePad else Layouts.numberPad
+            Mode.CLIPBOARD -> Layouts.emojiBottom
         }
         searchView?.visibility = if (searching) View.VISIBLE else View.GONE
         strip?.visibility = if (searching) View.GONE else View.VISIBLE
+        // Emoji and clipboard panels: same overall height as the letters, so nothing jumps.
+        val letterRows = if (prefs.numberRow) 5 else 4
+        val panelH = ((letterRows - 1) * kb.keyHeightPx + 6 * resources.displayMetrics.density).toInt()
         emojiPanel?.let { panel ->
-            if (mode == Mode.EMOJI) {
-                // Same overall height as the letters, so nothing jumps when switching.
-                val letterRows = if (prefs.numberRow) 5 else 4
-                panel.panelHeight = ((letterRows - 1) * kb.keyHeightPx + 6 * resources.displayMetrics.density).toInt()
-                panel.visibility = View.VISIBLE
-            } else {
-                panel.visibility = View.GONE
-            }
+            panel.panelHeight = panelH
+            panel.visibility = if (mode == Mode.EMOJI) View.VISIBLE else View.GONE
+        }
+        clipPanel?.let { panel ->
+            panel.panelHeight = panelH
+            panel.visibility = if (mode == Mode.CLIPBOARD) View.VISIBLE else View.GONE
         }
         // Wait until typing pauses briefly, then update the bar once (not on every key event).
         uiHandler.removeCallbacks(refreshStrip)
@@ -290,10 +321,26 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
         val s = strip ?: return
         if (mode == Mode.SEARCH) return
         val ic = currentInputConnection
-        val ctx = if (ic != null && suggestionsAllowed && mode != Mode.EMOJI) readContext(ic) else null
-        val word = ctx?.word ?: ""
+        val panelOpen = mode == Mode.EMOJI || mode == Mode.CLIPBOARD
         val request = ++stripRequest
-        val code = if (prefs.otpCodes && mode != Mode.EMOJI) OtpStore.current() else null
+        // A text shortcut ("@@" → your email) comes first, in any box except passwords.
+        offeredShortcut = null
+        if (ic != null && !panelOpen && !passwordField && shortcuts.all().isNotEmpty()) {
+            val before = ic.getTextBeforeCursor(40, 0)?.toString() ?: ""
+            var start = before.length
+            while (start > 0 && !before[start - 1].isWhitespace()) start--
+            val hit = shortcuts.match(before.substring(start))
+            if (hit != null) {
+                offeredShortcut = hit
+                s.otpCode = null
+                s.quoteLeft = false
+                s.suggestions = listOf(null, hit.text, null)
+                return
+            }
+        }
+        val ctx = if (ic != null && suggestionsAllowed && !panelOpen) readContext(ic) else null
+        val word = ctx?.word ?: ""
+        val code = if (prefs.otpCodes && !panelOpen) OtpStore.current() else null
         s.otpCode = code
         if (code != null) {
             uiHandler.removeCallbacks(otpListener)
@@ -627,6 +674,18 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
 
     override fun onSuggestionPicked(word: String) {
         val ic = currentInputConnection ?: return
+        val shortcut = offeredShortcut
+        if (shortcut != null && shortcut.text == word) {
+            // Replace the trigger ("@@") with the shortcut's text
+            ic.beginBatchEdit()
+            ic.deleteSurroundingText(shortcut.trigger.length, 0)
+            ic.commitText("$word ", 1)
+            ic.endBatchEdit()
+            offeredShortcut = null
+            autoSpaced = true
+            render()
+            return
+        }
         val ctx = readContext(ic)
         val typed = ctx?.word ?: ""
         // If the cursor is inside a word ("hel|lo"), replace the whole word, not just the start.
@@ -652,13 +711,14 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
                 render()
             }
             SuggestionStripView.ACTION_CLIPBOARD -> {
-                val cm = getSystemService(ClipboardManager::class.java)
-                val text = try {
-                    cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)
+                // Make sure what's on the clipboard now is in the list, then show the panel
+                try {
+                    clipHistory.add(getSystemService(ClipboardManager::class.java)?.primaryClip, this)
                 } catch (_: SecurityException) {
-                    null
                 }
-                if (!text.isNullOrEmpty()) currentInputConnection?.commitText(text, 1)
+                mode = Mode.CLIPBOARD
+                clipPanel?.refresh()
+                render()
             }
             SuggestionStripView.ACTION_SETTINGS -> {
                 startActivity(
@@ -701,6 +761,15 @@ class ClackIME : InputMethodService(), KeyboardView.Listener, SuggestionStripVie
             null
         }
         OtpDetector.fromClipboard(text)?.let { OtpStore.offer(it) }
+    }
+
+    // ---- clipboard history ------------------------------------------------------
+
+    override fun onClipPaste(text: String) {
+        currentInputConnection?.commitText(text, 1)
+        mode = Mode.LETTERS
+        updateAutoShift()
+        render()
     }
 
     // ---- emoji search -------------------------------------------------------

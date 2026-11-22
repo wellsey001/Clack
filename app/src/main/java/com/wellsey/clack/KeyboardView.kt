@@ -231,7 +231,7 @@ class KeyboardView(context: Context, private val listener: Listener) : View(cont
                 iconPaint.strokeWidth = dp(1.8f)
                 Icons.smiley(c, iconPaint, cx, cy, keyHeightPx * 0.4f)
             }
-            Key.SPACE -> Unit
+            Key.SPACE -> if (k.label == "space") drawText(c, "space", cx, cy, palette.hint, keyHeightPx * 0.26f)
             Key.TEXT -> {
                 val emoji = !k.label[0].isLetterOrDigit() && k.label.length > 1
                 drawText(c, shown(k.label), cx, cy, fg, keyHeightPx * (if (emoji) 0.5f else 0.44f))

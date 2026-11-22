@@ -74,6 +74,15 @@ class SetupActivity : Activity() {
         root.addView(toggle("Number hints on top row (when number row is off)", prefs.popupHints) { prefs.popupHints = it })
         root.addView(toggle("Pop-up preview on key press", prefs.keyPreview) { prefs.keyPreview = it })
 
+        root.addView(Button(this).apply {
+            text = "My words"
+            setOnClickListener { startActivity(Intent(this@SetupActivity, WordsActivity::class.java)) }
+        }, fullWidth(top = 8))
+        root.addView(Button(this).apply {
+            text = "Text shortcuts"
+            setOnClickListener { startActivity(Intent(this@SetupActivity, ShortcutsActivity::class.java)) }
+        }, fullWidth(top = 2))
+
         root.addView(section("Feedback"))
         root.addView(toggle("Vibrate on key press", prefs.vibrate) { prefs.vibrate = it })
         root.addView(toggle("Sound on key press", prefs.sound) { prefs.sound = it })
@@ -150,6 +159,7 @@ class SetupActivity : Activity() {
                 "• Press delete straight after an auto-correction to undo it\n" +
                 "• Missed the space bar? \"seeyoutomorrow\" becomes \"see you tomorrow\"\n" +
                 "• Long-press an emoji to pick a skin tone\n" +
+                "• Tap the clipboard in the toolbar for recent copies; hold one to pin it\n" +
                 "• Tap 🔍 in the emoji panel to search (try \"pizza\" or \"love\")\n" +
                 "• Names you write with a capital twice are capitalised for you\n" +
                 "• Slide left from delete to delete whole words\n" +

@@ -12,7 +12,7 @@ import java.util.Arrays
  * from then on. Learned words stay on the phone and are never taken from
  * password, email or web address fields.
  */
-class Dictionary(context: Context) {
+class Dictionary private constructor(context: Context) {
 
     private val appContext = context.applicationContext
     private val file = File(appContext.filesDir, "learned_words.tsv")
@@ -123,6 +123,7 @@ class Dictionary(context: Context) {
     @Synchronized
     fun forget(word: String): Boolean {
         val removed = learned.remove(word.lowercase()) != null
+        caps.remove(word.lowercase())
         if (removed) {
             dirty = true
             cacheKey = null
@@ -595,7 +596,38 @@ class Dictionary(context: Context) {
         }
     }
 
+    // ---- My words screen -------------------------------------------------------
+
+    /** Words you've taught Clack, A–Z, with how often you've used each. */
+    @Synchronized
+    fun learnedWords(): List<Pair<String, Int>> =
+        learned.entries.filter { !isMissingApostrophe(it.key) }
+            .map { (caps[it.key]?.first ?: it.key) to it.value }
+            .sortedBy { it.first.lowercase() }
+
+    /** Adds a word by hand: known straight away, and remembered with its capitals. */
+    @Synchronized
+    fun addWord(word: String) {
+        val w = word.trim()
+        if (w.isEmpty() || w.length > 32 || !w.all { it.isLetter() || it == '\'' || it == '-' }) return
+        val lower = w.lowercase()
+        learned[lower] = maxOf(learned[lower] ?: 0, LEARN_THRESHOLD)
+        if (w != lower && w[0].isUpperCase()) caps[lower] = w to LEARN_THRESHOLD
+        rejected.remove(lower)
+        dirty = true
+        cacheKey = null
+        autoKey = null
+        segKey = null
+        save()
+    }
+
     companion object {
+        @Volatile private var instance: Dictionary? = null
+
+        /** One shared dictionary for the keyboard and the settings screens. */
+        fun get(context: Context): Dictionary =
+            instance ?: synchronized(this) { instance ?: Dictionary(context).also { instance = it } }
+
         private const val MAX_LEARNED = 5000
         private const val MAX_PAIRS = 20000
         private const val COMMON_WORD_RANK = 300

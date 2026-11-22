@@ -142,6 +142,27 @@ object Layouts {
         symbolsBottom,
     )
 
+    private fun pad(label: String) = Key(label, Key.TEXT, 2.5f)
+    private val padDelete = Key("delete", Key.DELETE, 2.5f)
+    private val padEnter = Key("enter", Key.ENTER, 2.5f)
+    private val padSpace = Key("space", Key.SPACE, 2.5f)
+
+    /** Big keypad for number boxes (amounts, PINs, codes). */
+    val numberPad: List<List<Key>> = listOf(
+        listOf(pad("1"), pad("2"), pad("3"), Key("-", Key.TEXT, 2.5f)),
+        listOf(pad("4"), pad("5"), pad("6"), padSpace),
+        listOf(pad("7"), pad("8"), pad("9"), padDelete),
+        listOf(pad(","), pad("0"), pad("."), padEnter),
+    )
+
+    /** Dial-style keypad for phone numbers. */
+    val phonePad: List<List<Key>> = listOf(
+        listOf(pad("1"), pad("2"), pad("3"), Key("+", Key.TEXT, 2.5f)),
+        listOf(pad("4"), pad("5"), pad("6"), padSpace),
+        listOf(pad("7"), pad("8"), pad("9"), padDelete),
+        listOf(pad("*"), pad("0"), pad("#"), padEnter),
+    )
+
     /** Bottom row shown under the emoji panel. */
     val emojiBottom: List<List<Key>> = listOf(listOf(abc, Key(" ", Key.SPACE, 7f), delete))
 }

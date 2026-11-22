@@ -32,6 +32,10 @@
 | 🧠 **Learns your words** | Type a word twice and Clack treats it as correct and suggests it. Names, slang and in-jokes included. |
 | 😀 **1,900+ emoji** | Every emoji your phone can show, in categories, with recently used emoji and skin tones. **Search** by name (*pizza*, *love*, *cat*). |
 | ¯\\\_(ツ)\_/¯ **Emoticons and kaomoji** | Tabs of classic `:)` `<3` `^_^` faces and kaomoji, one tap away. |
+| 📋 **Clipboard history** | Your recent copies from the last hour, a tap away; pin the ones you paste often. Passwords copied from password managers are never stored. |
+| ⚡ **Text shortcuts** | Type `@@` and your email address is offered in the bar. Set your own in settings. |
+| 🔢 **Number pad** | Big keypad for amounts, PINs and codes, with `* # +` for phone numbers. |
+| 📖 **My words** | See, search, add and delete the words Clack has learned. |
 | 🔑 **Sign-in codes** | A "Paste code" button appears when a verification code arrives in a notification or is copied. It's held in memory for 5 minutes and never saved. |
 | 🔒 **Private by design** | No internet permission, no analytics, no accounts. Nothing is learned from passwords, emails, web addresses or incognito tabs. |
 | 🪶 **Tiny** | About 1 MB, pure Kotlin, zero third-party libraries. |
