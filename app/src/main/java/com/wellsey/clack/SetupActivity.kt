@@ -148,6 +148,7 @@ class SetupActivity : Activity() {
                 "• Tap a suggestion to finish or fix a word\n" +
                 "• Words you use twice are learned; long-press a suggestion to forget one\n" +
                 "• Press delete straight after an auto-correction to undo it\n" +
+                "• Missed the space bar? \"seeyoutomorrow\" becomes \"see you tomorrow\"\n" +
                 "• Long-press an emoji to pick a skin tone\n" +
                 "• Tap 🔍 in the emoji panel to search (try \"pizza\" or \"love\")\n" +
                 "• Names you write with a capital twice are capitalised for you\n" +

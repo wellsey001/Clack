@@ -74,10 +74,22 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
 
     private fun slotCount() = if (suggestions != null) 3 else toolbar.size
 
+    /** Left edges of each slot plus the right edge. A phrase in the middle gets extra room. */
+    private fun slotEdges(): FloatArray {
+        val n = slotCount()
+        val w = width.toFloat()
+        val center = suggestions?.getOrNull(1)
+        if (n == 3 && center != null && ' ' in center) {
+            return floatArrayOf(0f, w * 0.2f, w * 0.8f, w)
+        }
+        return FloatArray(n + 1) { it * w / n }
+    }
+
     private fun indexAt(x: Float): Int {
         if (otpMode) return if (x > width - closeWidth) 1 else 0
-        val n = slotCount()
-        return (x / (width / n.toFloat())).toInt().coerceIn(0, n - 1)
+        val edges = slotEdges()
+        for (i in 0 until edges.size - 1) if (x < edges[i + 1]) return i
+        return edges.size - 2
     }
 
     private fun drawOtp(canvas: Canvas, code: String) {
@@ -128,9 +140,10 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
         }
         val n = slotCount()
         val cell = width / n.toFloat()
+        val edges = slotEdges()
         if (pressedIndex in 0 until n) {
             fill.color = palette.keyPressed
-            rect.set(pressedIndex * cell + dp(4f), dp(5f), (pressedIndex + 1) * cell - dp(4f), height - dp(5f))
+            rect.set(edges[pressedIndex] + dp(4f), dp(5f), edges[pressedIndex + 1] - dp(4f), height - dp(5f))
             canvas.drawRoundRect(rect, height / 2f, height / 2f, fill)
         }
         val s = suggestions
@@ -138,15 +151,16 @@ class SuggestionStripView(context: Context, private val listener: Listener) : Vi
             for (i in 0 until 3) {
                 if (i > 0) {
                     fill.color = palette.divider
-                    canvas.drawRect(i * cell - dp(0.5f), height * 0.3f, i * cell + dp(0.5f), height * 0.7f, fill)
+                    canvas.drawRect(edges[i] - dp(0.5f), height * 0.3f, edges[i] + dp(0.5f), height * 0.7f, fill)
                 }
                 val word = s[i] ?: continue
                 val shown = if (i == 0 && quoteLeft) "“$word”" else word
                 textPaint.color = palette.text
                 textPaint.typeface = if (i == 1) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                val fitted = TextUtils.ellipsize(shown, textPaint, cell - dp(12f), TextUtils.TruncateAt.END).toString()
+                val slotW = edges[i + 1] - edges[i]
+                val fitted = TextUtils.ellipsize(shown, textPaint, slotW - dp(12f), TextUtils.TruncateAt.END).toString()
                 val y = height / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
-                canvas.drawText(fitted, i * cell + cell / 2, y, textPaint)
+                canvas.drawText(fitted, edges[i] + slotW / 2, y, textPaint)
             }
         } else {
             iconPaint.color = palette.icon

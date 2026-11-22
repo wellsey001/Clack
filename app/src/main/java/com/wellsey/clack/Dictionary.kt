@@ -116,6 +116,7 @@ class Dictionary(context: Context) {
         dirty = true
         cacheKey = null
         autoKey = null
+        segKey = null
     }
 
     /** Removes a word you've taught it. Built-in words can't be removed. */
@@ -126,6 +127,7 @@ class Dictionary(context: Context) {
             dirty = true
             cacheKey = null
             autoKey = null
+            segKey = null
             save()
         }
         return removed
@@ -165,6 +167,11 @@ class Dictionary(context: Context) {
             }
         }
         scores.remove(t)
+        // A run-together phrase: offer the split ("seeyoutomorrow" → "see you tomorrow").
+        if (loaded && t.length >= 6 && !isKnown(t)) segment(typed)?.let { seg ->
+            val top = scores.values.maxOrNull() ?: 0.0
+            scores[seg.text] = if (seg.confident) Double.MAX_VALUE / 4 else top * 0.999 + 1.0
+        }
         // Words that usually follow the previous one get a boost ("see you" + "s…" → "soon").
         if (prev != null) for (e in scores.entries) e.setValue(e.value * pairBonus(prev2, prev, e.key))
         val result = scores.entries
@@ -191,7 +198,7 @@ class Dictionary(context: Context) {
     }
 
     private fun findAutocorrection(typed: String): String? {
-        if (!loaded || typed.length < 2 || typed.length > 20) return null
+        if (!loaded || typed.length < 2 || typed.length > MAX_SEGMENT_LENGTH) return null
         if (!typed.all { it.isLetter() || it == '\'' }) return null
         if (typed.length > 1 && typed.all { !it.isLetter() || it.isUpperCase() }) return null // ACRONYMS
         if (typed.drop(1).any { it.isUpperCase() }) return null // iPhone, ColorOS, McDonald
@@ -202,28 +209,166 @@ class Dictionary(context: Context) {
         if (isKnown(t)) return null
         // A contraction missing its apostrophe is always fixed: "isnt" → "isn't", "im" → "I'm".
         if (isMissingApostrophe(t)) contractionOf[t]?.let { return matchCase(it, typed) }
-        val scores = HashMap<String, Double>()
-        for ((cand, weight) in edits(t)) {
-            if (!isCandidate(cand)) continue
-            val sc = freqScore(cand) * weight
-            if (sc > (scores[cand] ?: 0.0)) scores[cand] = sc
+
+        // 1. One typo in one word ("teh" → "the")
+        if (t.length <= 20) {
+            val scores = HashMap<String, Double>()
+            for ((cand, weight) in edits(t)) {
+                if (!isCandidate(cand)) continue
+                val sc = freqScore(cand) * weight
+                if (sc > (scores[cand] ?: 0.0)) scores[cand] = sc
+            }
+            pickClearWinner(scores, t, MIN_AUTOCORRECT_SCORE)?.let { return matchCase(it, typed) }
         }
-        // Two mistakes in one word: only for longer words, and only when very sure.
-        val twoEdits = scores.isEmpty() && t.length in 6..12
-        if (twoEdits) addTwoEditFixes(t, scores)
+
+        // 2. Several words run together ("seeyoutomorrow" → "see you tomorrow")
+        segment(typed)?.let { if (it.confident) return it.text }
+
+        // 3. Two typos in one longer word ("recieeve" → "receive")
+        if (t.length in 6..12) {
+            val scores = HashMap<String, Double>()
+            addTwoEditFixes(t, scores)
+            pickClearWinner(scores, t, MIN_TWO_EDIT_SCORE)?.let { return matchCase(it, typed) }
+        }
+        return null
+    }
+
+    private fun pickClearWinner(scores: Map<String, Double>, t: String, needed: Double): String? {
         val ranked = scores.entries.sortedByDescending { it.value }
         val best = ranked.firstOrNull() ?: return null
         val second = ranked.getOrNull(1)?.value ?: 0.0
         val margin = if (t.length <= 3) 2.5 else 2.0
-        val needed = if (twoEdits) MIN_TWO_EDIT_SCORE else MIN_AUTOCORRECT_SCORE
         if (best.value < needed || best.value < second * margin) return null
-        return matchCase(best.key, typed)
+        return best.key
+    }
+
+    // ---- run-together sentences ----------------------------------------------
+
+    /** A run-together phrase split into words, and whether it's safe to apply automatically. */
+    class Segmentation(val text: String, val confident: Boolean)
+
+    private class PieceOption(val word: String, val score: Double, val edits: Int)
+
+    private var segKey: String? = null
+    private var segValue: Segmentation? = null
+
+    /**
+     * Splits text typed without spaces into the most likely words, allowing for a
+     * letter hit instead of the space bar and a typo or two along the way:
+     * "seeyoutomorrow" → "see you tomorrow", "thankbyou" → "thank you",
+     * "helloohowareyou" → "hello how are you". Returns null if it doesn't split into
+     * real words. Tested in tools/segment_test.py: keep the two in step.
+     */
+    @Synchronized
+    fun segment(typed: String): Segmentation? {
+        val key = "$typed|$loaded"
+        if (key == segKey) return segValue
+        val result = findSegmentation(typed)
+        segKey = key
+        segValue = result
+        return result
+    }
+
+    private fun findSegmentation(typed: String): Segmentation? {
+        val t = typed.lowercase()
+        val n = t.length
+        if (!loaded || n < 6 || n > MAX_SEGMENT_LENGTH) return null
+        if (!t.all { it.isLetter() || it == '\'' }) return null
+        if (t in rejected || isKnown(t)) return null
+
+        val best = DoubleArray(n + 1) { Double.NEGATIVE_INFINITY }
+        val from = IntArray(n + 1) { -1 }
+        val word = arrayOfNulls<String>(n + 1)
+        val editsUsed = IntArray(n + 1)
+        best[0] = 0.0
+        val pieces = HashMap<String, List<PieceOption>>()
+
+        fun relax(k: Int, i: Int, o: PieceOption, extra: Double, extraEdits: Int) {
+            val score = best[i] + o.score + extra
+            if (score > best[k]) {
+                best[k] = score
+                from[k] = i
+                word[k] = o.word
+                editsUsed[k] = editsUsed[i] + o.edits + extraEdits
+            }
+        }
+
+        for (i in 0 until n) {
+            if (best[i] == Double.NEGATIVE_INFINITY) continue
+            for (j in i + 1..minOf(n, i + MAX_PIECE)) {
+                val p = t.substring(i, j)
+                val options = pieces.getOrPut(p) { pieceOptions(p) }
+                for (o in options) {
+                    relax(j, i, o, 0.0, 0)
+                    // a letter next to the space bar typed instead of a space ("thankbyou")
+                    if (j < n && t[j] in SPACE_SLIPS) relax(j + 1, i, o, -SLIP_COST, 1)
+                }
+            }
+        }
+        if (best[n] == Double.NEGATIVE_INFINITY) return null
+
+        val words = ArrayList<String>()
+        var k = n
+        while (k > 0) {
+            words.add(word[k] ?: return null)
+            k = from[k]
+        }
+        words.reverse()
+        if (words.size < 2) return null
+        val totalEdits = editsUsed[n]
+        if (totalEdits > (if (n < 10) 1 else if (n < 18) 2 else 3)) return null
+
+        // Apply automatically only when clearly right; otherwise it's just a suggestion.
+        val worst = words.maxOf { segRank(it) }
+        val confident = (words.size >= 3 && totalEdits <= 1 && worst < 10_000) ||
+            (words.size == 2 && totalEdits == 0 && worst < 2_000)
+        val shown = words.joinToString(" ") { capitalisation(it) ?: it }
+        return Segmentation(matchCase(shown, typed), confident)
+    }
+
+    /** How common a word is, for splitting (your own frequent words count as common). */
+    private fun segRank(w: String): Int {
+        rank[w]?.let { return it }
+        return if ((learned[w] ?: 0) >= LEARN_THRESHOLD && !isMissingApostrophe(w)) 3_000 else 1_000_000
+    }
+
+    private fun pieceAllowed(w: String): Boolean {
+        val r = segRank(w)
+        return when {
+            w.length == 1 -> w == "a" || w == "i"
+            w.length <= 3 -> r < 2_000 // short pieces must be very common words
+            else -> r < 30_000
+        }
+    }
+
+    /** Zipf's law: a word's chance falls with its rank, so "are" + "you" beats junk like "areyou". */
+    private fun zipf(w: String) = -Math.log(segRank(w) + 1.0)
+
+    private fun pieceOptions(p: String): List<PieceOption> {
+        val out = ArrayList<PieceOption>(2)
+        if (pieceAllowed(p)) out.add(PieceOption(p, zipf(p) - WORD_COST, 0))
+        if (isMissingApostrophe(p)) contractionOf[p]?.let { out.add(PieceOption(it, zipf(it) - WORD_COST, 0)) }
+        if (p.length >= 4) {
+            var bestWord: String? = null
+            var bestScore = Double.NEGATIVE_INFINITY
+            for ((cand, weight) in edits(p)) {
+                if (cand == p || !pieceAllowed(cand) || segRank(cand) >= 10_000) continue
+                val sc = zipf(cand) + Math.log(weight) - EDIT_COST - WORD_COST
+                if (sc > bestScore) {
+                    bestScore = sc
+                    bestWord = cand
+                }
+            }
+            bestWord?.let { out.add(PieceOption(it, bestScore, 1)) }
+        }
+        return out
     }
 
     /** You undid an auto-correction: leave this word alone from now on. */
     @Synchronized
     fun reject(word: String) {
         autoKey = null
+        segKey = null
         rejected.add(word.lowercase())
         caps.remove(word.lowercase()) // undoing a capital also forgets it
         dirty = true
@@ -476,6 +621,14 @@ class Dictionary(context: Context) {
         const val LEARN_THRESHOLD = 2
         private const val MIN_AUTOCORRECT_SCORE = 90.0
         private const val MIN_TWO_EDIT_SCORE = 150.0
+
+        // Sentence splitting (see tools/segment_test.py)
+        private const val MAX_SEGMENT_LENGTH = 40
+        private const val MAX_PIECE = 16
+        private const val WORD_COST = 1.0
+        private const val EDIT_COST = 4.0
+        private const val SLIP_COST = 3.5
+        private const val SPACE_SLIPS = "bnvcm" // keys next to the space bar
         private const val LETTERS = "abcdefghijklmnopqrstuvwxyz"
         private const val INSERTABLE = "abcdefghijklmnopqrstuvwxyz'"
 

@@ -25,6 +25,7 @@
 |---|---|
 | ⌨️ **Feels like Gboard** | Material You colours, flat keys, a pill-shaped enter key and light/dark themes that follow your system. |
 | 🔤 **Spell check** | Misspelt words get a fix in the middle of the suggestion bar: *teh → the*, *recieve → receive*, *dont → don't*. |
+| 🧩 **Fixes run-together sentences** | Missed spaces, a letter hit instead of the space bar, and a typo or two: *seeyoutomorrow* → **see you tomorrow**, *thankbyou* → **thank you**, *helloohowareyou* → **hello how are you**. |
 | ✅ **Auto-correct** | Corrects when you press space, but only when one fix is clearly right. Press delete to undo it. |
 | 🔮 **Next-word prediction** | After a space, Clack suggests what usually comes next: *see you* → **soon**, *on my* → **way**. It learns your own phrases too. |
 | 🔠 **Smart capitals** | *i* → **I**, *monday* → **Monday**, and names you write with a capital, like *sarah* → **Sarah**. Press delete to undo. |
@@ -95,7 +96,8 @@ Clack uses no AI model and has no server. It combines a few simple ideas:
 1. **A ranked word list.** 50,000 English words ordered by how often people use them, so *the* beats *thee*.
 2. **Typo patterns.** For an unknown word it tries every one-letter mistake: swapped letters, a missing or extra letter, a missed apostrophe, or the wrong key. A wrong key **next to** the right one on the keyboard counts as more likely.
 3. **Your vocabulary.** Words you type are counted on the phone, and words you use often rank higher.
-4. **Caution.** Auto-correct only acts when the best fix clearly beats the runner-up, and never in passwords, emails or web addresses.
+4. **Run-together text.** If a long "word" isn't a word, Clack tries every way to cut it into real words, allowing for a slipped space-bar key (b, n, v, c, m) and small typos, and picks the likeliest using how common each word is. Only clear-cut splits are applied automatically; others are offered in the bar.
+5. **Caution.** Auto-correct only acts when the best fix clearly beats the runner-up, and never in passwords, emails or web addresses.
 
 ## 🏗️ Project layout
 

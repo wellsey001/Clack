@@ -68,7 +68,7 @@ for rank, (w, c) in enumerate(words):
 # Remove common misspellings ("seperate", "helo", "goin") using codespell's list, if given.
 # The list is only used here to decide what to leave out; none of it ships in the app.
 # Real-looking words that are almost always typos in everyday messages
-EXTRA_MISSPELLINGS = set("helo".split())
+EXTRA_MISSPELLINGS = set("helo ofthe ifyou foryou areyou doyou ofyou ofyour notjust".split())
 KEEP_NAMES = set("""claus shepard chanel carmel tigger tiggers didi ned lew gage leary cristal ines gord
 linz naan worthing tennant emmit reacher skelton patten winn flagg devine pinter licker mose fane ambien""".split())
 if len(sys.argv) > 3:
@@ -83,6 +83,21 @@ if len(sys.argv) > 3:
     kept = [w for w in kept if w in KEEP_NAMES or w in SLANG.split() or not any(
         t in kept_set and ' ' not in t for t in fixes.get(w, []))]
     print('removed misspellings:', before - len(kept))
+# Drop junk run-together words from subtitles ("ofthis", "seeyou", "itjust"): rare words made of
+# two of the 150 most common words. Real words built that way are kept.
+REAL_COMPOUNDS = set("""insure therein thereof wherein whereby overdoing overdid overthink outback takedown
+belittle heron lifelike theseus orwell stillman seething instill downtime timeout letdown forgo inlet herein
+outdid nevermore beget wanton wantonly amour amore getup aback outdo uptake twosome hereto herewith whereof
+thereto assay andover aright stillwell dolittle wellman manus noone evenin""".split())
+top150 = set(w for w in kept[:150] if "'" not in w)
+def junk_compound(w, r):
+    if r < 20000 or len(w) < 5 or "'" in w or w in REAL_COMPOUNDS:
+        return False
+    return any(w[:k] in top150 and w[k:] in top150 and (k > 1 or w[0] in 'ai') and
+               (len(w) - k > 1 or w[-1] in 'ai') for k in range(1, len(w)))
+before = len(kept)
+kept = [w for r, w in enumerate(kept) if not junk_compound(w, r)]
+print('removed run-together junk:', before - len(kept))
 open(out, 'w').write('\n'.join(kept[:50000]) + '\n')
 print('kept', len(kept[:50000]), 'dropped', len(dropped))
 print('sample dropped:', ' '.join(dropped[:40]))
