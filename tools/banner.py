@@ -6,7 +6,14 @@ a(f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 
 a('<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f1a2e"/><stop offset="1" stop-color="#1f2023"/></linearGradient></defs>')
 a(f'<rect width="{W}" height="{H}" rx="28" fill="url(#bg)"/>')
 # title block
-a('<text x="80" y="190" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="108" font-weight="700" fill="#e8eaed" letter-spacing="-2">Clack</text>')
+# the keycap icon (same drawing as the app icon), 100 units scaled to 100px
+a('<g transform="translate(80 98)">'
+  '<rect width="100" height="100" rx="23" fill="#1A73E8"/>'
+  '<rect x="22" y="30" width="56" height="50" rx="12" fill="#B9CDF3"/>'
+  '<rect x="22" y="22" width="56" height="50" rx="12" fill="#FFFFFF"/>'
+  '<path d="M58.49 38.51 A12 12 0 1 0 58.49 55.49" fill="none" stroke="#1A73E8" stroke-width="7" stroke-linecap="round"/>'
+  '</g>')
+a('<text x="204" y="190" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="108" font-weight="700" fill="#e8eaed" letter-spacing="-2">Clack</text>')
 a('<text x="84" y="242" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="30" fill="#a8c7fa">A Gboard-style keyboard for Android</text>')
 a('<text x="84" y="290" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="22" fill="#9aa0a6">Fast · private · no internet permission</text>')
 # chips

@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Clack's keycap: a white key, seen slightly from the side, with a blue C. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- keyboard body -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,36 h48 a6,6 0 0 1 6,6 v26 a6,6 0 0 1 -6,6 h-48 a6,6 0 0 1 -6,-6 v-26 a6,6 0 0 1 6,-6z" />
-    <!-- keys -->
-    <path
-        android:fillColor="#1A73E8"
-        android:pathData="M30.5,42h7v6h-7z M40.5,42h7v6h-7z M50.5,42h7v6h-7z M60.5,42h7v6h-7z M70.5,42h7v6h-7z
-                          M30.5,51h7v6h-7z M40.5,51h7v6h-7z M50.5,51h7v6h-7z M60.5,51h7v6h-7z M70.5,51h7v6h-7z
-                          M38.5,61h31v6h-31z" />
+    <!-- the design is drawn on a 100-unit tile; the visible icon is the middle 72dp -->
+    <group android:translateX="18" android:translateY="18" android:scaleX="0.72" android:scaleY="0.72">
+        <!-- key side -->
+        <path android:fillColor="#B9CDF3" android:pathData="M34,30 h32 a12,12 0 0 1 12,12 v26 a12,12 0 0 1 -12,12 h-32 a12,12 0 0 1 -12,-12 v-26 a12,12 0 0 1 12,-12 z" />
+        <!-- key top -->
+        <path android:fillColor="#FFFFFF" android:pathData="M34,22 h32 a12,12 0 0 1 12,12 v26 a12,12 0 0 1 -12,12 h-32 a12,12 0 0 1 -12,-12 v-26 a12,12 0 0 1 12,-12 z" />
+        <!-- C -->
+        <path android:strokeColor="#1A73E8" android:strokeWidth="7" android:strokeLineCap="round"
+            android:pathData="M58.49,38.51 A12,12 0 1 0 58.49,55.49" />
+    </group>
 </vector>

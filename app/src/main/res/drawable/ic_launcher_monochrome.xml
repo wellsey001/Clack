@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clack's keycap: a white key, seen slightly from the side, with a blue C. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- the design is drawn on a 100-unit tile; the visible icon is the middle 72dp -->
+    <group android:translateX="18" android:translateY="18" android:scaleX="0.72" android:scaleY="0.72">
+        <!-- themed icon (Android 13+): outline of the key and the C, tinted by the system -->
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="5" android:pathData="M34.5,24.5 h31 a10,10 0 0 1 10,10 v25 a10,10 0 0 1 -10,10 h-31 a10,10 0 0 1 -10,-10 v-25 a10,10 0 0 1 10,-10 z" />
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineCap="round"
+            android:pathData="M58.49,38.51 A12,12 0 1 0 58.49,55.49" />
+    </group>
+</vector>
